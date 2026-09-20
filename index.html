@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Hari Log</title>
 <style>
   :root{
@@ -14,6 +15,7 @@
     --line: #3a2c5c;
   }
   *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
   body{
     margin:0;
     min-height:100vh;
@@ -34,6 +36,15 @@
   }
   @media (max-width:720px){
     .columns{grid-template-columns:1fr;gap:0;}
+  }
+  @media (max-width:480px){
+    body{padding:20px 12px 48px;}
+    h1{font-size:21px;}
+    .eyebrow{font-size:10px;letter-spacing:2px;}
+    .subtitle{font-size:12px;}
+    .section-title{font-size:16px;}
+    li.song{padding:10px 12px;}
+    .song-name{font-size:15px;}
   }
   header{
     text-align:center;
@@ -85,12 +96,13 @@
   .search-row input{
     width:100%;
     padding:10px 14px;
+    min-height:44px;
     border-radius:8px;
     border:1px solid var(--line);
     background:var(--bg-panel);
     color:var(--text);
     font-family:'Helvetica Neue', Arial, sans-serif;
-    font-size:14px;
+    font-size:16px;
     outline:none;
   }
   .search-row input:focus{border-color:var(--gold-soft);}
@@ -103,13 +115,15 @@
   }
   .add-row input{
     flex:1;
+    min-width:0;
     padding:10px 14px;
+    min-height:44px;
     border-radius:8px;
     border:1px solid var(--line);
     background:var(--bg-panel);
     color:var(--text);
     font-family:'Helvetica Neue', Arial, sans-serif;
-    font-size:14px;
+    font-size:16px;
     outline:none;
   }
   .add-row input:focus{border-color:var(--gold-soft);}
@@ -119,6 +133,9 @@
     border:none;
     border-radius:8px;
     padding:0 18px;
+    min-height:44px;
+    min-width:56px;
+    flex-shrink:0;
     font-family:'Helvetica Neue', Arial, sans-serif;
     font-weight:bold;
     font-size:14px;
@@ -137,6 +154,7 @@
     align-items:center;
     justify-content:space-between;
     gap:10px;
+    flex-wrap:wrap;
   }
   .idx{
     font-family:'Helvetica Neue', Arial, sans-serif;
@@ -147,8 +165,10 @@
   }
   .song-name{
     flex:1;
+    min-width:0;
     font-size:15.5px;
     line-height:1.3;
+    overflow-wrap:break-word;
   }
   .actions{
     display:flex;
@@ -165,6 +185,7 @@
     letter-spacing:0.5px;
     text-transform:uppercase;
     padding:5px 10px;
+    min-height:36px;
     border-radius:16px;
     cursor:pointer;
     white-space:nowrap;
@@ -174,10 +195,12 @@
     background:none;
     border:none;
     color:var(--text-dim);
-    font-size:16px;
+    font-size:18px;
     cursor:pointer;
     line-height:1;
-    padding:4px 6px;
+    padding:8px;
+    min-width:36px;
+    min-height:36px;
   }
   .remove-btn:hover{color:#e07a7a;}
 
@@ -189,6 +212,13 @@
     padding:20px 0;
   }
   .loading{text-align:center; color:var(--text-dim); font-family:sans-serif; font-size:13px; padding:40px 0;}
+  .sync-status{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:10px;
+  }
+  .sync-status.offline{color:#e0a97a;}
 </style>
 </head>
 <body>
@@ -197,6 +227,7 @@
     <div class="eyebrow">Let's Find The Song</div>
     <h1>Hari Log</h1>
     <div class="subtitle">Songs from the "Let's Find The Song" YouTube series.<br>Keep upcoming picks in the To-do list, move them down once sung.</div>
+    <div class="sync-status" id="syncStatus"></div>
   </header>
 
   <div id="loading" class="loading">Loading your list…</div>
@@ -233,9 +264,21 @@
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
-const COMPLETED_KEY = 'completed-songs-list';
-const TODO_KEY = 'todo-songs-list';
+const firebaseConfig = {
+  apiKey: "AIzaSyBCDHwGUHKyM_t_iOb4a9NBBi2Lpw6Kg1k",
+  authDomain: "hari-log.firebaseapp.com",
+  projectId: "hari-log",
+  storageBucket: "hari-log.firebasestorage.app",
+  messagingSenderId: "836620841342",
+  appId: "1:836620841342:web:4f6d787835ad09bba2032f",
+  measurementId: "G-MKC34M1BTS"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const docRef = db.collection('songtracker').doc('035fbd6c3b1d4fa8b3aa08a86d41528a');
 
 const defaultCompleted = [
   "Unnal mudiyum thambi",
@@ -270,36 +313,54 @@ const defaultTodo = [
 
 let completed = [];
 let todo = [];
+let docLoaded = false;
 
-async function loadAll() {
-  try {
-    const result = await window.storage.get(COMPLETED_KEY, false);
-    completed = (result && result.value) ? JSON.parse(result.value) : [...defaultCompleted];
-    if (!result) await saveCompleted();
-  } catch (e) {
-    completed = [...defaultCompleted];
+function setSyncStatus(fromCache) {
+  const statusEl = document.getElementById('syncStatus');
+  if (fromCache) {
+    statusEl.textContent = 'Offline — showing last synced data';
+    statusEl.classList.add('offline');
+  } else {
+    statusEl.textContent = 'Synced across devices';
+    statusEl.classList.remove('offline');
   }
+}
 
-  try {
-    const result = await window.storage.get(TODO_KEY, false);
-    todo = (result && result.value) ? JSON.parse(result.value) : [...defaultTodo];
-    if (!result) await saveTodo();
-  } catch (e) {
-    todo = [...defaultTodo];
-  }
-
+function showContent() {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('content').style.display = '';
-  renderTodo();
-  renderCompleted();
 }
 
-async function saveCompleted() {
-  try { await window.storage.set(COMPLETED_KEY, JSON.stringify(completed), false); }
-  catch (e) { console.error('Save failed', e); }
-}
-async function saveTodo() {
-  try { await window.storage.set(TODO_KEY, JSON.stringify(todo), false); }
+docRef.onSnapshot(async (snap) => {
+  if (snap.exists) {
+    const data = snap.data();
+    completed = data.completed || [];
+    todo = data.todo || [];
+  } else if (!docLoaded) {
+    completed = [...defaultCompleted];
+    todo = [...defaultTodo];
+    await saveAll();
+  }
+  docLoaded = true;
+  setSyncStatus(snap.metadata.fromCache);
+  showContent();
+  renderTodo();
+  renderCompleted();
+}, (err) => {
+  console.error('Sync error', err);
+  if (!docLoaded) {
+    completed = [...defaultCompleted];
+    todo = [...defaultTodo];
+    docLoaded = true;
+    showContent();
+    renderTodo();
+    renderCompleted();
+  }
+  setSyncStatus(true);
+});
+
+async function saveAll() {
+  try { await docRef.set({ completed, todo }); }
   catch (e) { console.error('Save failed', e); }
 }
 
@@ -334,8 +395,7 @@ function renderTodo() {
       completed.push(name);
       renderTodo();
       renderCompleted();
-      await saveTodo();
-      await saveCompleted();
+      await saveAll();
     });
   });
   listEl.querySelectorAll('.remove-btn').forEach(btn => {
@@ -343,7 +403,7 @@ function renderTodo() {
       const idx = parseInt(e.currentTarget.dataset.idx);
       todo.splice(idx, 1);
       renderTodo();
-      await saveTodo();
+      await saveAll();
     });
   });
 }
@@ -381,7 +441,7 @@ function renderCompleted() {
       const idx = parseInt(e.currentTarget.dataset.idx);
       completed.splice(idx, 1);
       renderCompleted();
-      await saveCompleted();
+      await saveAll();
     });
   });
 }
@@ -395,7 +455,7 @@ async function addCompleted() {
   completed.push(name);
   input.value = '';
   renderCompleted();
-  await saveCompleted();
+  await saveAll();
 }
 document.getElementById('addBtn').addEventListener('click', addCompleted);
 document.getElementById('addInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCompleted(); });
@@ -407,12 +467,10 @@ async function addTodo() {
   todo.push(name);
   input.value = '';
   renderTodo();
-  await saveTodo();
+  await saveAll();
 }
 document.getElementById('todoAddBtn').addEventListener('click', addTodo);
 document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
-
-loadAll();
 </script>
 </body>
 </html>
