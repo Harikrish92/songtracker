@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hari Log</title>
+<style>
+  :root{
+    --bg: #1b1330;
+    --bg-panel: #241a3d;
+    --gold: #d4af37;
+    --gold-soft: #e8cd6f;
+    --text: #f2ead9;
+    --text-dim: #b6acc9;
+    --line: #3a2c5c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% 0%, #2a1f4a 0%, transparent 55%),
+      radial-gradient(circle at 90% 100%, #2a1f4a 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family: 'Georgia', 'Iowan Old Style', serif;
+    padding: 28px 16px 60px;
+  }
+  .wrap{max-width:1000px;margin:0 auto;}
+  .columns{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:32px;
+    align-items:start;
+  }
+  @media (max-width:720px){
+    .columns{grid-template-columns:1fr;gap:0;}
+  }
+  header{
+    text-align:center;
+    margin-bottom:20px;
+    padding-bottom:16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow{
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    font-size:11px;
+    color:var(--gold-soft);
+    margin-bottom:6px;
+  }
+  h1{
+    margin:0;
+    font-size:24px;
+    font-weight:400;
+    color:var(--text);
+  }
+  .subtitle{
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size:12.5px;
+    color:var(--text-dim);
+    margin-top:8px;
+    line-height:1.5;
+  }
+
+  section.block{margin-bottom:34px;}
+  .section-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .section-title{
+    font-size:18px;
+    font-weight:400;
+    color:var(--gold-soft);
+  }
+  .count-label{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+
+  .search-row{margin-bottom:12px;}
+  .search-row input{
+    width:100%;
+    padding:10px 14px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--bg-panel);
+    color:var(--text);
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:14px;
+    outline:none;
+  }
+  .search-row input:focus{border-color:var(--gold-soft);}
+  .search-row input::placeholder{color:var(--text-dim);}
+
+  .add-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .add-row input{
+    flex:1;
+    padding:10px 14px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--bg-panel);
+    color:var(--text);
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:14px;
+    outline:none;
+  }
+  .add-row input:focus{border-color:var(--gold-soft);}
+  .add-row button{
+    background: var(--gold);
+    color:#1b1330;
+    border:none;
+    border-radius:8px;
+    padding:0 18px;
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-weight:bold;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .add-row button:hover{background:var(--gold-soft);}
+
+  ul.list{list-style:none;margin:0;padding:0;}
+  li.song{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 16px;
+    margin-bottom:8px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .idx{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:11px;
+    color:var(--text-dim);
+    width:20px;
+    flex-shrink:0;
+  }
+  .song-name{
+    flex:1;
+    font-size:15.5px;
+    line-height:1.3;
+  }
+  .actions{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    flex-shrink:0;
+  }
+  .done-btn{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--gold-soft);
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:11px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    padding:5px 10px;
+    border-radius:16px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .done-btn:hover{border-color:var(--gold-soft); background:rgba(212,175,55,0.08);}
+  .remove-btn{
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    font-size:16px;
+    cursor:pointer;
+    line-height:1;
+    padding:4px 6px;
+  }
+  .remove-btn:hover{color:#e07a7a;}
+
+  .empty{
+    text-align:center;
+    color:var(--text-dim);
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:13px;
+    padding:20px 0;
+  }
+  .loading{text-align:center; color:var(--text-dim); font-family:sans-serif; font-size:13px; padding:40px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Let's Find The Song</div>
+    <h1>Hari Log</h1>
+    <div class="subtitle">Songs from the "Let's Find The Song" YouTube series.<br>Keep upcoming picks in the To-do list, move them down once sung.</div>
+  </header>
+
+  <div id="loading" class="loading">Loading your list…</div>
+
+  <div id="content" class="columns" style="display:none;">
+    <section class="block">
+      <div class="section-head">
+        <div class="section-title">To-do</div>
+        <div class="count-label" id="todoCountLabel"></div>
+      </div>
+      <div class="add-row">
+        <input type="text" id="todoAddInput" placeholder="Add a song to try next…">
+        <button id="todoAddBtn">Add</button>
+      </div>
+      <ul class="list" id="todoList"></ul>
+      <div class="empty" id="todoEmptyMsg" style="display:none;">Nothing queued up yet.</div>
+    </section>
+
+    <section class="block">
+      <div class="section-head">
+        <div class="section-title">Completed</div>
+        <div class="count-label" id="completedCountLabel"></div>
+      </div>
+      <div class="search-row">
+        <input type="text" id="searchInput" placeholder="Search completed songs…">
+      </div>
+      <div class="add-row">
+        <input type="text" id="addInput" placeholder="Add a newly completed song…">
+        <button id="addBtn">Add</button>
+      </div>
+      <ul class="list" id="list"></ul>
+      <div class="empty" id="emptyMsg" style="display:none;">No songs match your search.</div>
+    </section>
+  </div>
+</div>
+
+<script>
+const COMPLETED_KEY = 'completed-songs-list';
+const TODO_KEY = 'todo-songs-list';
+
+const defaultCompleted = [
+  "Unnal mudiyum thambi",
+  "Jumbalaka Jumbalaka",
+  "Naan malarodu",
+  "Nilave vaa",
+  "Venmathi venmathiye nillu",
+  "Senthamizh thenmozhiyal",
+  "Nee kattum sela madipula",
+  "Chiku bukku chiku bukku",
+  "Kasu mela kasu vanthu",
+  "Thendrale thendrale",
+  "Vizhigalin Aruginil Vaanam",
+  "Yaaro ivan yaaro",
+  "Sorgame endralum",
+  "Kuru mugil",
+  "Engayo paartha mayakam",
+  "Kaatu kuyilu manasukulla",
+  "Pachamalai poovu",
+  "Amma Amma Nee enga amma",
+  "Athinthom",
+  "Nilave ennidam",
+  "Om Sivoham",
+  "Thamarai poovukum"
+];
+
+const defaultTodo = [
+  "Innum ennai enna seiya",
+  "Sundari kannal oru",
+  "Naanaga naan illai"
+];
+
+let completed = [];
+let todo = [];
+
+async function loadAll() {
+  try {
+    const result = await window.storage.get(COMPLETED_KEY, false);
+    completed = (result && result.value) ? JSON.parse(result.value) : [...defaultCompleted];
+    if (!result) await saveCompleted();
+  } catch (e) {
+    completed = [...defaultCompleted];
+  }
+
+  try {
+    const result = await window.storage.get(TODO_KEY, false);
+    todo = (result && result.value) ? JSON.parse(result.value) : [...defaultTodo];
+    if (!result) await saveTodo();
+  } catch (e) {
+    todo = [...defaultTodo];
+  }
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = '';
+  renderTodo();
+  renderCompleted();
+}
+
+async function saveCompleted() {
+  try { await window.storage.set(COMPLETED_KEY, JSON.stringify(completed), false); }
+  catch (e) { console.error('Save failed', e); }
+}
+async function saveTodo() {
+  try { await window.storage.set(TODO_KEY, JSON.stringify(todo), false); }
+  catch (e) { console.error('Save failed', e); }
+}
+
+function renderTodo() {
+  const listEl = document.getElementById('todoList');
+  const emptyMsg = document.getElementById('todoEmptyMsg');
+  const countLabel = document.getElementById('todoCountLabel');
+
+  listEl.innerHTML = '';
+  listEl.style.display = todo.length ? 'block' : 'none';
+  emptyMsg.style.display = todo.length ? 'none' : 'block';
+  countLabel.textContent = `${todo.length} queued`;
+
+  todo.forEach((name, idx) => {
+    const li = document.createElement('li');
+    li.className = 'song';
+    li.innerHTML = `
+      <span class="idx">${idx + 1}</span>
+      <span class="song-name">${name}</span>
+      <div class="actions">
+        <button class="done-btn" data-idx="${idx}">Mark sung</button>
+        <button class="remove-btn" data-idx="${idx}" title="Remove">✕</button>
+      </div>
+    `;
+    listEl.appendChild(li);
+  });
+
+  listEl.querySelectorAll('.done-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      const [name] = todo.splice(idx, 1);
+      completed.push(name);
+      renderTodo();
+      renderCompleted();
+      await saveTodo();
+      await saveCompleted();
+    });
+  });
+  listEl.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      todo.splice(idx, 1);
+      renderTodo();
+      await saveTodo();
+    });
+  });
+}
+
+function renderCompleted() {
+  const listEl = document.getElementById('list');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const countLabel = document.getElementById('completedCountLabel');
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  const filtered = completed
+    .map((name, originalIdx) => ({ name, originalIdx }))
+    .filter(s => s.name.toLowerCase().includes(query));
+
+  listEl.innerHTML = '';
+  listEl.style.display = filtered.length ? 'block' : 'none';
+  emptyMsg.style.display = filtered.length ? 'none' : (completed.length ? 'block' : 'none');
+  countLabel.textContent = query
+    ? `${filtered.length} of ${completed.length}`
+    : `${completed.length} learned`;
+
+  filtered.forEach((s, displayIdx) => {
+    const li = document.createElement('li');
+    li.className = 'song';
+    li.innerHTML = `
+      <span class="idx">${displayIdx + 1}</span>
+      <span class="song-name">${s.name}</span>
+      <button class="remove-btn" data-idx="${s.originalIdx}" title="Remove">✕</button>
+    `;
+    listEl.appendChild(li);
+  });
+
+  listEl.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      completed.splice(idx, 1);
+      renderCompleted();
+      await saveCompleted();
+    });
+  });
+}
+
+document.getElementById('searchInput').addEventListener('input', renderCompleted);
+
+async function addCompleted() {
+  const input = document.getElementById('addInput');
+  const name = input.value.trim();
+  if (!name) return;
+  completed.push(name);
+  input.value = '';
+  renderCompleted();
+  await saveCompleted();
+}
+document.getElementById('addBtn').addEventListener('click', addCompleted);
+document.getElementById('addInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCompleted(); });
+
+async function addTodo() {
+  const input = document.getElementById('todoAddInput');
+  const name = input.value.trim();
+  if (!name) return;
+  todo.push(name);
+  input.value = '';
+  renderTodo();
+  await saveTodo();
+}
+document.getElementById('todoAddBtn').addEventListener('click', addTodo);
+document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+
+loadAll();
+</script>
+</body>
+</html>
