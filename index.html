@@ -281,6 +281,7 @@
     justify-content:center;
   }
   .voice-bar.on .mic-btn{background:var(--gold);color:#1b1330;border-color:var(--gold);}
+  .voice-bar.on:not(.live) .mic-btn{opacity:0.6;}
   .voice-bar.awake .mic-btn{animation:pulse 1.2s ease-in-out infinite;}
   @keyframes pulse{
     0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0.6);}
@@ -310,7 +311,7 @@
     <details class="voice-help" id="voiceHelp" style="display:none;">
       <summary>🎙 Voice commands</summary>
       <ul>
-        <li>Tap the mic, then say <code>"My Logger"</code> (or <code>"Hey MyLogger"</code>) to wake it up.</li>
+        <li>Tap the mic and say a command straight away, or say <code>"My Logger"</code> first when it's waiting.</li>
         <li><code>"Add Nilave vaa"</code> — adds to To-do</li>
         <li><code>"Add Nilave vaa to completed"</code></li>
         <li><code>"Mark Nilave vaa as sung"</code> or <code>"I sang Nilave vaa"</code></li>
@@ -580,10 +581,11 @@ document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if 
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const VOICE_PREF_KEY = 'hari-log-voice-on';
-const AWAKE_MS = 8000;
+const AWAKE_MS = 10000;
 
-// Speech engines spell the wake word many ways: "hey my logger", "hi mylogger", "a my blogger"…
-const WAKE_RE = /\b(?:(?:hey|hi|hay|hai|he|a|ok|okay)[\s,]+)?my[\s-]*(?:b?logg?er|lugger|log\s?her|locker|logar)\b[\s,.!?]*/i;
+// Speech engines spell the wake word many ways: "my logger", "mylogger", "my lager",
+// "mi logar", "my lodger", "mylo gar", "hey my blogger"…
+const WAKE_RE = /\b(?:(?:hey|hi|hay|hai|he|a|ok|okay|hello)[\s,]+)?(?:my|mi|mai|mae|mile?)[\s-]*(?:b?l[aou]gg?[aeo]?r|lodger|log\s?(?:her|ar|a)|lo\s?gar|locker|logo)\b[\s,.!?:-]*/i;
 
 const LIST_WORDS = '(to[\\s-]?do|todo|2[\\s-]?do|queue|completed|complete|done|sung)';
 const toListName = (w) => (!w ? null : /^(completed|complete|done|sung)$/i.test(w) ? 'completed' : 'todo');
@@ -611,7 +613,11 @@ function findSong(list, spoken) {
 }
 
 function parseCommand(raw) {
-  const text = raw.trim().replace(/[.!?]+$/, '').trim();
+  const text = raw.trim()
+    .replace(/[.!?]+$/, '')
+    .replace(/^(?:please|can you|could you|now)\s+/i, '')
+    .replace(/\s+please$/i, '')
+    .trim();
   let m;
   if (/^(stop listening|stop|turn off|go to sleep|goodbye|bye)$/i.test(text)) return { action: 'off' };
   if (/^(cancel|never ?mind|nothing)$/i.test(text)) return { action: 'cancel' };
@@ -622,7 +628,7 @@ function parseCommand(raw) {
   if ((m = text.match(new RegExp(`^(?:remove|delete)\\s+(.+?)(?:\\s+from\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
     return { action: 'remove', song: m[1], list: toListName(m[2]) };
   }
-  if ((m = text.match(new RegExp(`^(?:add|put|queue)\\s+(.+?)(?:\\s+(?:to|in|into|on|under)\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
+  if ((m = text.match(new RegExp(`^(?:add|ad|at|put|queue|include)\\s+(?:the\\s+)?(?:song\\s+)?(.+?)(?:\\s+(?:to|in|into|on|under)\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
     return { action: 'add', song: m[1], list: toListName(m[2]) || 'todo' };
   }
   return null;
@@ -635,12 +641,12 @@ async function runCommand(cmd) {
       const name = capitalize(cmd.song.trim());
       const list = cmd.list === 'completed' ? completed : todo;
       if (list.some(n => norm(n) === norm(name))) {
-        return { ok: false, msg: `"${name}" is already in ${label(cmd.list)}` };
+        return { ok: false, msg: `"${name}" is already in ${label(cmd.list)}`, say: `${name} is already in your ${label(cmd.list)} list` };
       }
       list.push(name);
       renderTodo(); renderCompleted();
       await saveAll();
-      return { ok: true, msg: `Added "${name}" to ${label(cmd.list)}` };
+      return { ok: true, msg: `"${name}" is added to ${label(cmd.list)}`, say: `Your song ${name} is added to ${label(cmd.list)}` };
     }
     case 'sung': {
       const i = findSong(todo, cmd.song);
@@ -649,7 +655,7 @@ async function runCommand(cmd) {
         completed.push(name);
         renderTodo(); renderCompleted();
         await saveAll();
-        return { ok: true, msg: `Marked "${name}" as sung` };
+        return { ok: true, msg: `"${name}" is marked as sung`, say: `Nice! ${name} is marked as sung` };
       }
       return runCommand({ action: 'add', song: cmd.song, list: 'completed' });
     }
@@ -662,10 +668,10 @@ async function runCommand(cmd) {
           const [name] = list.splice(i, 1);
           renderTodo(); renderCompleted();
           await saveAll();
-          return { ok: true, msg: `Removed "${name}" from ${label(l)}` };
+          return { ok: true, msg: `"${name}" is removed from ${label(l)}`, say: `${name} is removed from ${label(l)}` };
         }
       }
-      return { ok: false, msg: `Couldn't find "${cmd.song}"` };
+      return { ok: false, msg: `Couldn't find "${cmd.song}"`, say: `Sorry, I couldn't find ${cmd.song}` };
     }
     case 'search': {
       document.getElementById('searchInput').value = cmd.query;
@@ -680,10 +686,15 @@ const voiceStatusEl = document.getElementById('voiceStatus');
 const micBtn = document.getElementById('micBtn');
 
 let recognition = null;
-let voiceOn = false;
-let awake = false;
+let voiceOn = false;      // mic toggled on by the user
+let listening = false;    // a recognition session is currently running
+let speaking = false;     // we're talking back; the mic is paused so we don't hear ourselves
+let awake = false;        // next utterance is a command, no wake word needed
 let awakeTimer = null;
 let restartTimer = null;
+let errorStreak = 0;
+let handledThisSession = false;
+let lastInterim = '';
 
 function setVoiceStatus(text, kind) {
   voiceStatusEl.textContent = text;
@@ -691,7 +702,7 @@ function setVoiceStatus(text, kind) {
 }
 
 function idleStatus() {
-  setVoiceStatus(voiceOn ? 'Say "Hey MyLogger"…' : 'Voice off — tap the mic');
+  setVoiceStatus(voiceOn ? 'Say "My Logger"…' : 'Voice off — tap the mic');
 }
 
 function setAwake(on) {
@@ -699,7 +710,6 @@ function setAwake(on) {
   awake = on;
   voiceBar.classList.toggle('awake', on);
   if (on) {
-    setVoiceStatus('Listening for a command…');
     awakeTimer = setTimeout(() => { setAwake(false); idleStatus(); }, AWAKE_MS);
   }
 }
@@ -725,94 +735,185 @@ function chime(ok = true) {
   } catch (e) { /* audio is a nicety */ }
 }
 
-async function handleUtterance(transcript) {
+// Talk back. The mic is paused while speaking so the reply isn't heard as a command.
+function speak(text) {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) { resolve(); return; }
+    speaking = true;
+    stopSession();
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      speaking = false;
+      resolve();
+      startSession();
+    };
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-IN';
+      u.rate = 1.05;
+      u.onend = done;
+      u.onerror = done;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch (e) { done(); return; }
+    // Some browsers never fire onend; don't leave the mic paused forever.
+    setTimeout(done, 1500 + text.length * 90);
+  });
+}
+
+async function reply(result) {
+  chime(result.ok);
+  setVoiceStatus(result.msg, result.ok ? 'ok' : 'err');
+  await speak(result.say || result.msg);
+}
+
+async function handleUtterance(alternatives) {
+  const heard = alternatives[0].trim();
+  if (!heard) return;
   let commandText = null;
-  const wake = transcript.match(WAKE_RE);
-  if (wake) {
-    commandText = transcript.slice(wake.index + wake[0].length).trim();
-    if (!commandText) { setAwake(true); chime(); return; }
-  } else if (awake) {
-    commandText = transcript.trim();
-  } else {
-    voiceBar.classList.remove('awake'); // an interim result looked like the wake word, but it wasn't
-    idleStatus();
-    return; // Not addressed to us.
+  let woke = false;
+  for (const alt of alternatives) {
+    const wake = alt.match(WAKE_RE);
+    if (wake) {
+      woke = true;
+      commandText = alt.slice(wake.index + wake[0].length).trim();
+      break;
+    }
+  }
+
+  if (woke && !commandText) {
+    setAwake(true);
+    chime();
+    setVoiceStatus('Yes? Say a command…');
+    return;
+  }
+  if (!woke) {
+    if (!awake) {
+      setVoiceStatus(`Heard "${heard}" — start with "My Logger"`);
+      return;
+    }
+    commandText = heard;
   }
 
   setAwake(false);
-  if (!docLoaded) { setVoiceStatus('Still loading your list — try again in a moment', 'err'); return; }
+  if (!docLoaded) { await reply({ ok: false, msg: 'Still loading your list — try again in a moment' }); return; }
   const cmd = parseCommand(commandText);
   if (!cmd) {
-    chime(false);
-    setVoiceStatus(`Didn't understand: "${commandText}"`, 'err');
+    await reply({ ok: false, msg: `Didn't understand "${commandText}"`, say: "Sorry, I didn't get that" });
+    setAwake(true); // give another go without repeating the wake word
+    setVoiceStatus(`Didn't understand "${commandText}" — try again`, 'err');
     return;
   }
-  if (cmd.action === 'off') { stopVoice(); setVoiceStatus('Voice off — see you!'); return; }
+  if (cmd.action === 'off') { await speak('Okay, bye'); stopVoice(); setVoiceStatus('Voice off — see you!'); return; }
   if (cmd.action === 'cancel') { idleStatus(); return; }
 
   const result = await runCommand(cmd);
-  chime(result.ok);
-  setVoiceStatus(result.msg, result.ok ? 'ok' : 'err');
+  await reply(result);
+  // Stay ready for a follow-up command for a few seconds.
+  setAwake(true);
 }
 
 function createRecognition() {
   const r = new SpeechRecognition();
-  r.continuous = true;
+  // One utterance per session, restarted in onend: far more reliable on Android and iOS
+  // than continuous mode, which drops or repeats results there.
+  r.continuous = false;
   r.interimResults = true;
+  r.maxAlternatives = 3;
   r.lang = 'en-IN';
+
+  r.onstart = () => {
+    listening = true;
+    handledThisSession = false;
+    lastInterim = '';
+    voiceBar.classList.add('live');
+  };
 
   r.onresult = (event) => {
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
-      const transcript = res[0].transcript;
       if (res.isFinal) {
-        handleUtterance(transcript);
-      } else if (awake || WAKE_RE.test(transcript)) {
-        voiceBar.classList.add('awake');
-        clearTimeout(awakeTimer);
-        setVoiceStatus(`“${transcript.trim()}”`);
+        handledThisSession = true;
+        lastInterim = '';
+        const alts = Array.from(res, a => a.transcript);
+        handleUtterance(alts);
+      } else {
+        lastInterim = res[0].transcript;
+        setVoiceStatus(`“${lastInterim.trim()}”`);
       }
     }
+    errorStreak = 0;
   };
 
   r.onerror = (event) => {
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       stopVoice();
-      setVoiceStatus('Microphone access was blocked', 'err');
+      setVoiceStatus('Mic blocked — allow microphone access for this site', 'err');
     } else if (event.error === 'audio-capture') {
       stopVoice();
       setVoiceStatus('No microphone found', 'err');
+    } else if (event.error === 'network') {
+      errorStreak++;
+      setVoiceStatus('Voice needs an internet connection…', 'err');
     }
-    // 'no-speech', 'network', 'aborted' are transient; onend restarts us.
+    // 'no-speech' and 'aborted' are routine; onend restarts us.
   };
 
-  // Browsers end recognition after silence or a while of listening; keep it going while on.
   r.onend = () => {
-    if (!voiceOn || document.hidden) return;
-    clearTimeout(restartTimer);
-    restartTimer = setTimeout(() => {
-      try { r.start(); } catch (e) { /* already started */ }
-    }, 250);
+    listening = false;
+    voiceBar.classList.remove('live');
+    // Some mobile browsers end the session without ever marking the result final.
+    if (!handledThisSession && lastInterim.trim()) {
+      const text = lastInterim;
+      lastInterim = '';
+      handleUtterance([text]);
+    }
+    scheduleRestart();
   };
   return r;
 }
 
-function startVoice() {
+function scheduleRestart() {
+  clearTimeout(restartTimer);
+  if (!voiceOn || speaking || document.hidden) return;
+  const delay = errorStreak ? Math.min(1000 * errorStreak, 5000) : 100;
+  restartTimer = setTimeout(startSession, delay);
+}
+
+function startSession() {
+  if (!voiceOn || speaking || listening || document.hidden) return;
   if (!recognition) recognition = createRecognition();
+  try { recognition.start(); listening = true; } catch (e) { /* already running */ }
+}
+
+function stopSession() {
+  clearTimeout(restartTimer);
+  if (recognition && listening) { try { recognition.abort(); } catch (e) {} }
+}
+
+function startVoice({ ready = false } = {}) {
   voiceOn = true;
-  try { recognition.start(); } catch (e) { /* already started */ }
+  errorStreak = 0;
   voiceBar.classList.add('on');
   micBtn.setAttribute('aria-pressed', 'true');
   try { localStorage.setItem(VOICE_PREF_KEY, '1'); } catch (e) {}
-  idleStatus();
+  if (ready) {
+    setAwake(true);
+    setVoiceStatus('Listening — say a command, e.g. "Add Nilave vaa"');
+  } else {
+    idleStatus();
+  }
+  startSession();
 }
 
 function stopVoice() {
   voiceOn = false;
-  clearTimeout(restartTimer);
   setAwake(false);
-  if (recognition) { try { recognition.abort(); } catch (e) {} }
-  voiceBar.classList.remove('on');
+  stopSession();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  voiceBar.classList.remove('on', 'live');
   micBtn.setAttribute('aria-pressed', 'false');
   try { localStorage.removeItem(VOICE_PREF_KEY); } catch (e) {}
   idleStatus();
@@ -822,24 +923,28 @@ if (SpeechRecognition) {
   voiceBar.style.display = '';
   document.getElementById('voiceHelp').style.display = '';
   micBtn.addEventListener('click', () => {
-    if (voiceOn) stopVoice();
-    else { chime(); startVoice(); }
+    if (voiceOn && awake) { stopVoice(); return; }
+    if (voiceOn) { chime(); setAwake(true); setVoiceStatus('Listening — say a command (tap again to turn off)'); return; }
+    // iOS only lets a page speak after a tap; prime speech synthesis here.
+    try { speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {}
+    chime();
+    // Tapping the mic means "I'm about to give a command" — no wake word needed.
+    startVoice({ ready: true });
   });
 
   // Pause the mic while the app is in the background, resume when it comes back.
   document.addEventListener('visibilitychange', () => {
-    if (!voiceOn || !recognition) return;
-    if (document.hidden) { try { recognition.abort(); } catch (e) {} }
-    else { try { recognition.start(); } catch (e) {} }
+    if (!voiceOn) return;
+    if (document.hidden) stopSession();
+    else startSession();
   });
 
   // Opened via "?listen" (Siri/Google Assistant shortcut, home-screen long-press):
-  // start the mic already awake so the next thing you say is taken as a command.
+  // start the mic ready so the next thing you say is taken as a command.
   const params = new URLSearchParams(location.search);
   if (params.has('listen')) {
     history.replaceState(null, '', location.pathname);
-    startVoice();
-    setAwake(true);
+    startVoice({ ready: true });
     chime();
   } else {
     // Resume if it was left on last time (works once mic permission has been granted).
