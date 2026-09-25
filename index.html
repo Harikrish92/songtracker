@@ -311,7 +311,8 @@
     <details class="voice-help" id="voiceHelp" style="display:none;">
       <summary>🎙 Voice commands</summary>
       <ul>
-        <li>Tap the mic and say a command straight away, or say <code>"My Logger"</code> first when it's waiting.</li>
+        <li>The app starts listening when you open it — just say a command. Later, say <code>"My Logger"</code> first to wake it.</li>
+        <li>Tap the mic anytime to give a command, or tap twice to turn it off.</li>
         <li><code>"Add Nilave vaa"</code> — adds to To-do</li>
         <li><code>"Add Nilave vaa to completed"</code></li>
         <li><code>"Mark Nilave vaa as sung"</code> or <code>"I sang Nilave vaa"</code></li>
@@ -580,7 +581,6 @@ document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if 
 // ---------- Voice commands ("Hey MyLogger, ...") ----------
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const VOICE_PREF_KEY = 'hari-log-voice-on';
 const AWAKE_MS = 10000;
 
 // Speech engines spell the wake word many ways: "my logger", "mylogger", "my lager",
@@ -695,6 +695,8 @@ let restartTimer = null;
 let errorStreak = 0;
 let handledThisSession = false;
 let lastInterim = '';
+let userTouched = false;
+let tappedAwake = false;  // the current command window was opened by a mic tap (a 2nd tap turns off)  // Chrome may refuse the mic and speech until the page has been touched
 
 function setVoiceStatus(text, kind) {
   voiceStatusEl.textContent = text;
@@ -708,6 +710,7 @@ function idleStatus() {
 function setAwake(on) {
   clearTimeout(awakeTimer);
   awake = on;
+  if (!on) tappedAwake = false;
   voiceBar.classList.toggle('awake', on);
   if (on) {
     awakeTimer = setTimeout(() => { setAwake(false); idleStatus(); }, AWAKE_MS);
@@ -719,6 +722,7 @@ let audioCtx = null;
 function chime(ok = true) {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const notes = ok ? [660, 880] : [440, 330];
     notes.forEach((freq, i) => {
       const osc = audioCtx.createOscillator();
@@ -848,7 +852,13 @@ function createRecognition() {
   };
 
   r.onerror = (event) => {
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+    if ((event.error === 'not-allowed' || event.error === 'service-not-allowed') && !userTouched) {
+      // Chrome wouldn't start the mic by itself on open; the first touch anywhere will start it.
+      voiceOn = false;
+      setAwake(false);
+      voiceBar.classList.remove('on', 'live');
+      setVoiceStatus('Tap anywhere to start listening');
+    } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       stopVoice();
       setVoiceStatus('Mic blocked — allow microphone access for this site', 'err');
     } else if (event.error === 'audio-capture') {
@@ -898,7 +908,6 @@ function startVoice({ ready = false } = {}) {
   errorStreak = 0;
   voiceBar.classList.add('on');
   micBtn.setAttribute('aria-pressed', 'true');
-  try { localStorage.setItem(VOICE_PREF_KEY, '1'); } catch (e) {}
   if (ready) {
     setAwake(true);
     setVoiceStatus('Listening — say a command, e.g. "Add Nilave vaa"');
@@ -915,43 +924,60 @@ function stopVoice() {
   try { speechSynthesis.cancel(); } catch (e) {}
   voiceBar.classList.remove('on', 'live');
   micBtn.setAttribute('aria-pressed', 'false');
-  try { localStorage.removeItem(VOICE_PREF_KEY); } catch (e) {}
   idleStatus();
+}
+
+// iOS/Android only let a page speak or play sounds after a touch; unlock both on the first one.
+function unlockAudio() {
+  try { speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {}
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {}
+}
+
+// Start listening whenever the app is opened or brought back on screen.
+function autoStart() {
+  if (voiceOn || document.hidden) return;
+  startVoice({ ready: true });
+  chime();
 }
 
 if (SpeechRecognition) {
   voiceBar.style.display = '';
   document.getElementById('voiceHelp').style.display = '';
   micBtn.addEventListener('click', () => {
-    if (voiceOn && awake) { stopVoice(); return; }
-    if (voiceOn) { chime(); setAwake(true); setVoiceStatus('Listening — say a command (tap again to turn off)'); return; }
-    // iOS only lets a page speak after a tap; prime speech synthesis here.
-    try { speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {}
+    unlockAudio();
+    if (voiceOn && awake && tappedAwake) { stopVoice(); return; }
     chime();
     // Tapping the mic means "I'm about to give a command" — no wake word needed.
-    startVoice({ ready: true });
+    if (voiceOn) setAwake(true);
+    else startVoice({ ready: true });
+    tappedAwake = true;
+    setVoiceStatus('Listening — say a command (tap again to turn off)');
   });
 
-  // Pause the mic while the app is in the background, resume when it comes back.
+  // The first touch anywhere unlocks spoken replies, and starts the mic if Chrome
+  // refused to start it on its own when the app opened.
+  const onFirstTouch = (e) => {
+    userTouched = true;
+    unlockAudio();
+    if (!voiceOn && !micBtn.contains(e.target)) autoStart();
+  };
+  document.addEventListener('pointerdown', onFirstTouch, { once: true, capture: true });
+
+  // Pause the mic while the app is in the background; start again when it comes back.
   document.addEventListener('visibilitychange', () => {
-    if (!voiceOn) return;
-    if (document.hidden) stopSession();
-    else startSession();
+    if (document.hidden) { stopSession(); return; }
+    if (voiceOn) startSession();
+    else autoStart();
   });
 
-  // Opened via "?listen" (Siri/Google Assistant shortcut, home-screen long-press):
-  // start the mic ready so the next thing you say is taken as a command.
-  const params = new URLSearchParams(location.search);
-  if (params.has('listen')) {
+  // "?listen" is used by Siri/Google Assistant shortcuts; listening starts on open anyway.
+  if (new URLSearchParams(location.search).has('listen')) {
     history.replaceState(null, '', location.pathname);
-    startVoice({ ready: true });
-    chime();
-  } else {
-    // Resume if it was left on last time (works once mic permission has been granted).
-    let wasOn = false;
-    try { wasOn = localStorage.getItem(VOICE_PREF_KEY) === '1'; } catch (e) {}
-    if (wasOn) startVoice();
   }
+  autoStart();
 }
 </script>
 </body>
