@@ -310,7 +310,7 @@
     <details class="voice-help" id="voiceHelp" style="display:none;">
       <summary>🎙 Voice commands</summary>
       <ul>
-        <li>Tap the mic, then say <code>"Hey MyLogger"</code> to wake it up.</li>
+        <li>Tap the mic, then say <code>"My Logger"</code> (or <code>"Hey MyLogger"</code>) to wake it up.</li>
         <li><code>"Add Nilave vaa"</code> — adds to To-do</li>
         <li><code>"Add Nilave vaa to completed"</code></li>
         <li><code>"Mark Nilave vaa as sung"</code> or <code>"I sang Nilave vaa"</code></li>
@@ -833,10 +833,20 @@ if (SpeechRecognition) {
     else { try { recognition.start(); } catch (e) {} }
   });
 
-  // Resume if it was left on last time (works once mic permission has been granted).
-  let wasOn = false;
-  try { wasOn = localStorage.getItem(VOICE_PREF_KEY) === '1'; } catch (e) {}
-  if (wasOn) startVoice();
+  // Opened via "?listen" (Siri/Google Assistant shortcut, home-screen long-press):
+  // start the mic already awake so the next thing you say is taken as a command.
+  const params = new URLSearchParams(location.search);
+  if (params.has('listen')) {
+    history.replaceState(null, '', location.pathname);
+    startVoice();
+    setAwake(true);
+    chime();
+  } else {
+    // Resume if it was left on last time (works once mic permission has been granted).
+    let wasOn = false;
+    try { wasOn = localStorage.getItem(VOICE_PREF_KEY) === '1'; } catch (e) {}
+    if (wasOn) startVoice();
+  }
 }
 </script>
 </body>
