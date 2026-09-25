@@ -1,5 +1,5 @@
 // Bump this when the app shell changes to drop old caches.
-const CACHE = 'hari-log-v1';
+const CACHE = 'hari-log-v2';
 const SHELL = [
   './',
   './index.html',

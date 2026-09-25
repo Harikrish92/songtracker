@@ -36,7 +36,7 @@
     font-family: 'Georgia', 'Iowan Old Style', serif;
     padding: 28px 16px 60px;
     padding-top: calc(28px + env(safe-area-inset-top));
-    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
   .wrap{max-width:1000px;margin:0 auto;}
   .columns{
@@ -52,7 +52,7 @@
     body{
       padding:20px 12px 48px;
       padding-top:calc(20px + env(safe-area-inset-top));
-      padding-bottom:calc(48px + env(safe-area-inset-bottom));
+      padding-bottom:calc(88px + env(safe-area-inset-bottom));
     }
     h1{font-size:21px;}
     .eyebrow{font-size:10px;letter-spacing:2px;}
@@ -234,6 +234,70 @@
     margin-top:10px;
   }
   .sync-status.offline{color:#e0a97a;}
+
+  /* Voice commands */
+  .voice-help{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-top:10px;
+    text-align:left;
+    max-width:520px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  .voice-help summary{cursor:pointer;color:var(--gold-soft);text-align:center;list-style:none;}
+  .voice-help summary::-webkit-details-marker{display:none;}
+  .voice-help ul{margin:8px 0 0;padding-left:18px;line-height:1.7;}
+  .voice-help code{color:var(--text);font-family:inherit;font-style:italic;}
+  .voice-bar{
+    position:fixed;
+    left:50%;
+    transform:translateX(-50%);
+    bottom:calc(14px + env(safe-area-inset-bottom));
+    display:flex;
+    align-items:center;
+    gap:10px;
+    max-width:calc(100% - 24px);
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:28px;
+    padding:6px 14px 6px 6px;
+    box-shadow:0 6px 24px rgba(0,0,0,0.45);
+    z-index:10;
+  }
+  .mic-btn{
+    width:44px;
+    height:44px;
+    flex-shrink:0;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--bg);
+    color:var(--text-dim);
+    font-size:20px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .voice-bar.on .mic-btn{background:var(--gold);color:#1b1330;border-color:var(--gold);}
+  .voice-bar.awake .mic-btn{animation:pulse 1.2s ease-in-out infinite;}
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0.6);}
+    50%{box-shadow:0 0 0 10px rgba(212,175,55,0);}
+  }
+  .voice-status{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:13px;
+    color:var(--text-dim);
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .voice-bar.awake .voice-status{color:var(--gold-soft);}
+  .voice-status.ok{color:#9fd49f;}
+  .voice-status.err{color:#e0a97a;}
 </style>
 </head>
 <body>
@@ -243,6 +307,19 @@
     <h1>Hari Log</h1>
     <div class="subtitle">Songs from the "Let's Find The Song" YouTube series.<br>Keep upcoming picks in the To-do list, move them down once sung.</div>
     <div class="sync-status" id="syncStatus"></div>
+    <details class="voice-help" id="voiceHelp" style="display:none;">
+      <summary>🎙 Voice commands</summary>
+      <ul>
+        <li>Tap the mic, then say <code>"Hey MyLogger"</code> to wake it up.</li>
+        <li><code>"Add Nilave vaa"</code> — adds to To-do</li>
+        <li><code>"Add Nilave vaa to completed"</code></li>
+        <li><code>"Mark Nilave vaa as sung"</code> or <code>"I sang Nilave vaa"</code></li>
+        <li><code>"Remove Nilave vaa"</code> (optionally <code>"from to-do / completed"</code>)</li>
+        <li><code>"Search Nilave"</code> / <code>"Clear search"</code></li>
+        <li><code>"Stop listening"</code> — turns the mic off</li>
+      </ul>
+      You can say it all at once: <code>"Hey MyLogger, add Nilave vaa"</code>.
+    </details>
   </header>
 
   <div id="loading" class="loading">Loading your list…</div>
@@ -277,6 +354,11 @@
       <div class="empty" id="emptyMsg" style="display:none;">No songs match your search.</div>
     </section>
   </div>
+</div>
+
+<div class="voice-bar" id="voiceBar" style="display:none;">
+  <button class="mic-btn" id="micBtn" title="Toggle voice commands" aria-pressed="false">🎙</button>
+  <div class="voice-status" id="voiceStatus">Voice off — tap the mic</div>
 </div>
 
 <script>
@@ -493,6 +575,269 @@ async function addTodo() {
 }
 document.getElementById('todoAddBtn').addEventListener('click', addTodo);
 document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+
+// ---------- Voice commands ("Hey MyLogger, ...") ----------
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const VOICE_PREF_KEY = 'hari-log-voice-on';
+const AWAKE_MS = 8000;
+
+// Speech engines spell the wake word many ways: "hey my logger", "hi mylogger", "a my blogger"…
+const WAKE_RE = /\b(?:(?:hey|hi|hay|hai|he|a|ok|okay)[\s,]+)?my[\s-]*(?:b?logg?er|lugger|log\s?her|locker|logar)\b[\s,.!?]*/i;
+
+const LIST_WORDS = '(to[\\s-]?do|todo|2[\\s-]?do|queue|completed|complete|done|sung)';
+const toListName = (w) => (!w ? null : /^(completed|complete|done|sung)$/i.test(w) ? 'completed' : 'todo');
+
+const norm = (s) => s.toLowerCase().replace(/[^a-z0-9஀-௿\s]/g, '').replace(/\s+/g, ' ').trim();
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Find the song in `list` that best matches what was spoken. Returns its index or -1.
+function findSong(list, spoken) {
+  const q = norm(spoken);
+  if (!q) return -1;
+  let idx = list.findIndex(n => norm(n) === q);
+  if (idx !== -1) return idx;
+  idx = list.findIndex(n => norm(n).includes(q) || q.includes(norm(n)));
+  if (idx !== -1) return idx;
+  const qWords = new Set(q.split(' '));
+  let best = -1, bestScore = 0;
+  list.forEach((n, i) => {
+    const words = norm(n).split(' ');
+    const hits = words.filter(w => qWords.has(w)).length;
+    const score = hits / Math.max(words.length, qWords.size);
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  return bestScore >= 0.5 ? best : -1;
+}
+
+function parseCommand(raw) {
+  const text = raw.trim().replace(/[.!?]+$/, '').trim();
+  let m;
+  if (/^(stop listening|stop|turn off|go to sleep|goodbye|bye)$/i.test(text)) return { action: 'off' };
+  if (/^(cancel|never ?mind|nothing)$/i.test(text)) return { action: 'cancel' };
+  if (/^(clear|reset) (the )?search$/i.test(text)) return { action: 'search', query: '' };
+  if ((m = text.match(/^(?:search|find|look for|search for)\s+(.+)$/i))) return { action: 'search', query: m[1] };
+  if ((m = text.match(/^(?:mark|move)\s+(.+?)\s+(?:as\s+)?(?:sung|done|completed|complete|finished)$/i))) return { action: 'sung', song: m[1] };
+  if ((m = text.match(/^(?:i\s+)?(?:sang|have sung|finished)\s+(.+)$/i))) return { action: 'sung', song: m[1] };
+  if ((m = text.match(new RegExp(`^(?:remove|delete)\\s+(.+?)(?:\\s+from\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
+    return { action: 'remove', song: m[1], list: toListName(m[2]) };
+  }
+  if ((m = text.match(new RegExp(`^(?:add|put|queue)\\s+(.+?)(?:\\s+(?:to|in|into|on|under)\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
+    return { action: 'add', song: m[1], list: toListName(m[2]) || 'todo' };
+  }
+  return null;
+}
+
+async function runCommand(cmd) {
+  const label = (l) => (l === 'todo' ? 'To-do' : 'Completed');
+  switch (cmd.action) {
+    case 'add': {
+      const name = capitalize(cmd.song.trim());
+      const list = cmd.list === 'completed' ? completed : todo;
+      if (list.some(n => norm(n) === norm(name))) {
+        return { ok: false, msg: `"${name}" is already in ${label(cmd.list)}` };
+      }
+      list.push(name);
+      renderTodo(); renderCompleted();
+      await saveAll();
+      return { ok: true, msg: `Added "${name}" to ${label(cmd.list)}` };
+    }
+    case 'sung': {
+      const i = findSong(todo, cmd.song);
+      if (i !== -1) {
+        const [name] = todo.splice(i, 1);
+        completed.push(name);
+        renderTodo(); renderCompleted();
+        await saveAll();
+        return { ok: true, msg: `Marked "${name}" as sung` };
+      }
+      return runCommand({ action: 'add', song: cmd.song, list: 'completed' });
+    }
+    case 'remove': {
+      const lists = cmd.list ? [cmd.list] : ['todo', 'completed'];
+      for (const l of lists) {
+        const list = l === 'todo' ? todo : completed;
+        const i = findSong(list, cmd.song);
+        if (i !== -1) {
+          const [name] = list.splice(i, 1);
+          renderTodo(); renderCompleted();
+          await saveAll();
+          return { ok: true, msg: `Removed "${name}" from ${label(l)}` };
+        }
+      }
+      return { ok: false, msg: `Couldn't find "${cmd.song}"` };
+    }
+    case 'search': {
+      document.getElementById('searchInput').value = cmd.query;
+      renderCompleted();
+      return { ok: true, msg: cmd.query ? `Searching for "${cmd.query}"` : 'Search cleared' };
+    }
+  }
+}
+
+const voiceBar = document.getElementById('voiceBar');
+const voiceStatusEl = document.getElementById('voiceStatus');
+const micBtn = document.getElementById('micBtn');
+
+let recognition = null;
+let voiceOn = false;
+let awake = false;
+let awakeTimer = null;
+let restartTimer = null;
+
+function setVoiceStatus(text, kind) {
+  voiceStatusEl.textContent = text;
+  voiceStatusEl.className = 'voice-status' + (kind ? ' ' + kind : '');
+}
+
+function idleStatus() {
+  setVoiceStatus(voiceOn ? 'Say "Hey MyLogger"…' : 'Voice off — tap the mic');
+}
+
+function setAwake(on) {
+  clearTimeout(awakeTimer);
+  awake = on;
+  voiceBar.classList.toggle('awake', on);
+  if (on) {
+    setVoiceStatus('Listening for a command…');
+    awakeTimer = setTimeout(() => { setAwake(false); idleStatus(); }, AWAKE_MS);
+  }
+}
+
+// Short two-note chime so you know it woke up, without looking at the screen.
+let audioCtx = null;
+function chime(ok = true) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const notes = ok ? [660, 880] : [440, 330];
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const t = audioCtx.currentTime + i * 0.12;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    });
+  } catch (e) { /* audio is a nicety */ }
+}
+
+async function handleUtterance(transcript) {
+  let commandText = null;
+  const wake = transcript.match(WAKE_RE);
+  if (wake) {
+    commandText = transcript.slice(wake.index + wake[0].length).trim();
+    if (!commandText) { setAwake(true); chime(); return; }
+  } else if (awake) {
+    commandText = transcript.trim();
+  } else {
+    voiceBar.classList.remove('awake'); // an interim result looked like the wake word, but it wasn't
+    idleStatus();
+    return; // Not addressed to us.
+  }
+
+  setAwake(false);
+  if (!docLoaded) { setVoiceStatus('Still loading your list — try again in a moment', 'err'); return; }
+  const cmd = parseCommand(commandText);
+  if (!cmd) {
+    chime(false);
+    setVoiceStatus(`Didn't understand: "${commandText}"`, 'err');
+    return;
+  }
+  if (cmd.action === 'off') { stopVoice(); setVoiceStatus('Voice off — see you!'); return; }
+  if (cmd.action === 'cancel') { idleStatus(); return; }
+
+  const result = await runCommand(cmd);
+  chime(result.ok);
+  setVoiceStatus(result.msg, result.ok ? 'ok' : 'err');
+}
+
+function createRecognition() {
+  const r = new SpeechRecognition();
+  r.continuous = true;
+  r.interimResults = true;
+  r.lang = 'en-IN';
+
+  r.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const res = event.results[i];
+      const transcript = res[0].transcript;
+      if (res.isFinal) {
+        handleUtterance(transcript);
+      } else if (awake || WAKE_RE.test(transcript)) {
+        voiceBar.classList.add('awake');
+        clearTimeout(awakeTimer);
+        setVoiceStatus(`“${transcript.trim()}”`);
+      }
+    }
+  };
+
+  r.onerror = (event) => {
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      stopVoice();
+      setVoiceStatus('Microphone access was blocked', 'err');
+    } else if (event.error === 'audio-capture') {
+      stopVoice();
+      setVoiceStatus('No microphone found', 'err');
+    }
+    // 'no-speech', 'network', 'aborted' are transient; onend restarts us.
+  };
+
+  // Browsers end recognition after silence or a while of listening; keep it going while on.
+  r.onend = () => {
+    if (!voiceOn || document.hidden) return;
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => {
+      try { r.start(); } catch (e) { /* already started */ }
+    }, 250);
+  };
+  return r;
+}
+
+function startVoice() {
+  if (!recognition) recognition = createRecognition();
+  voiceOn = true;
+  try { recognition.start(); } catch (e) { /* already started */ }
+  voiceBar.classList.add('on');
+  micBtn.setAttribute('aria-pressed', 'true');
+  try { localStorage.setItem(VOICE_PREF_KEY, '1'); } catch (e) {}
+  idleStatus();
+}
+
+function stopVoice() {
+  voiceOn = false;
+  clearTimeout(restartTimer);
+  setAwake(false);
+  if (recognition) { try { recognition.abort(); } catch (e) {} }
+  voiceBar.classList.remove('on');
+  micBtn.setAttribute('aria-pressed', 'false');
+  try { localStorage.removeItem(VOICE_PREF_KEY); } catch (e) {}
+  idleStatus();
+}
+
+if (SpeechRecognition) {
+  voiceBar.style.display = '';
+  document.getElementById('voiceHelp').style.display = '';
+  micBtn.addEventListener('click', () => {
+    if (voiceOn) stopVoice();
+    else { chime(); startVoice(); }
+  });
+
+  // Pause the mic while the app is in the background, resume when it comes back.
+  document.addEventListener('visibilitychange', () => {
+    if (!voiceOn || !recognition) return;
+    if (document.hidden) { try { recognition.abort(); } catch (e) {} }
+    else { try { recognition.start(); } catch (e) {} }
+  });
+
+  // Resume if it was left on last time (works once mic permission has been granted).
+  let wasOn = false;
+  try { wasOn = localStorage.getItem(VOICE_PREF_KEY) === '1'; } catch (e) {}
+  if (wasOn) startVoice();
+}
 </script>
 </body>
 </html>
