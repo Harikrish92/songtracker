@@ -37,7 +37,7 @@
     font-family: 'Georgia', 'Iowan Old Style', serif;
     padding: 28px 16px 60px;
     padding-top: calc(28px + env(safe-area-inset-top));
-    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
   .wrap{max-width:1200px;margin:0 auto;}
   .columns{
@@ -53,7 +53,7 @@
     body{
       padding:20px 12px 48px;
       padding-top:calc(20px + env(safe-area-inset-top));
-      padding-bottom:calc(48px + env(safe-area-inset-bottom));
+      padding-bottom:calc(88px + env(safe-area-inset-bottom));
     }
     h1{font-size:21px;}
     .eyebrow{font-size:10px;letter-spacing:2px;}
@@ -307,6 +307,71 @@
     margin-top:10px;
   }
   .sync-status.offline{color:#e0a97a;}
+
+  /* Voice commands */
+  .voice-help{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-top:10px;
+    text-align:left;
+    max-width:520px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  .voice-help summary{cursor:pointer;color:var(--gold-soft);text-align:center;list-style:none;}
+  .voice-help summary::-webkit-details-marker{display:none;}
+  .voice-help ul{margin:8px 0 0;padding-left:18px;line-height:1.7;}
+  .voice-help code{color:var(--text);font-family:inherit;font-style:italic;}
+  .voice-bar{
+    position:fixed;
+    left:50%;
+    transform:translateX(-50%);
+    bottom:calc(14px + env(safe-area-inset-bottom));
+    display:flex;
+    align-items:center;
+    gap:10px;
+    max-width:calc(100% - 24px);
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:28px;
+    padding:6px 14px 6px 6px;
+    box-shadow:0 6px 24px rgba(0,0,0,0.45);
+    z-index:10;
+  }
+  .mic-btn{
+    width:44px;
+    height:44px;
+    flex-shrink:0;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--bg);
+    color:var(--text-dim);
+    font-size:20px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .voice-bar.on .mic-btn{background:var(--gold);color:#1b1330;border-color:var(--gold);}
+  .voice-bar.on:not(.live) .mic-btn{opacity:0.6;}
+  .voice-bar.awake .mic-btn{animation:pulse 1.2s ease-in-out infinite;}
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0.6);}
+    50%{box-shadow:0 0 0 10px rgba(212,175,55,0);}
+  }
+  .voice-status{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:13px;
+    color:var(--text-dim);
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .voice-bar.awake .voice-status{color:var(--gold-soft);}
+  .voice-status.ok{color:#9fd49f;}
+  .voice-status.err{color:#e0a97a;}
 </style>
 </head>
 <body>
@@ -316,6 +381,20 @@
     <h1>Hari Log</h1>
     <div class="subtitle">Pick a category, line up ideas in To-do,<br>move them to In progress while creating, and to Posted once live.</div>
     <div class="sync-status" id="syncStatus"></div>
+    <details class="voice-help" id="voiceHelp" style="display:none;">
+      <summary>🎙 Voice commands</summary>
+      <ul>
+        <li>The app starts listening when you open it — just say a command. Later, say <code>"My Logger"</code> first to wake it.</li>
+        <li>Tap the mic anytime to give a command, or tap twice to turn it off.</li>
+        <li><code>"Add Nilave vaa"</code> — adds to To-do</li>
+        <li><code>"Add Nilave vaa to completed"</code></li>
+        <li><code>"Mark Nilave vaa as sung"</code> or <code>"I sang Nilave vaa"</code></li>
+        <li><code>"Remove Nilave vaa"</code> (optionally <code>"from to-do / completed"</code>)</li>
+        <li><code>"Search Nilave"</code> / <code>"Clear search"</code></li>
+        <li><code>"Stop listening"</code> — turns the mic off</li>
+      </ul>
+      You can say it all at once: <code>"Hey MyLogger, add Nilave vaa"</code>.
+    </details>
   </header>
 
   <div id="loading" class="loading">Loading your content…</div>
@@ -373,6 +452,11 @@
       </section>
     </div>
   </div>
+</div>
+
+<div class="voice-bar" id="voiceBar" style="display:none;">
+  <button class="mic-btn" id="micBtn" title="Toggle voice commands" aria-pressed="false">🎙</button>
+  <div class="voice-status" id="voiceStatus">Voice off — tap the mic</div>
 </div>
 
 <script>
@@ -741,6 +825,419 @@ document.getElementById('deleteCategoryBtn').addEventListener('click', () => {
   selectedId = null;
   commit();
 });
+async function addTodo() {
+  const input = document.getElementById('todoAddInput');
+  const name = input.value.trim();
+  if (!name) return;
+  todo.push(name);
+  input.value = '';
+  renderTodo();
+  await saveAll();
+}
+document.getElementById('todoAddBtn').addEventListener('click', addTodo);
+document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+
+// ---------- Voice commands ("Hey MyLogger, ...") ----------
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const AWAKE_MS = 10000;
+
+// Speech engines spell the wake word many ways: "my logger", "mylogger", "my lager",
+// "mi logar", "my lodger", "mylo gar", "hey my blogger"…
+const WAKE_RE = /\b(?:(?:hey|hi|hay|hai|he|a|ok|okay|hello)[\s,]+)?(?:my|mi|mai|mae|mile?)[\s-]*(?:b?l[aou]gg?[aeo]?r|lodger|log\s?(?:her|ar|a)|lo\s?gar|locker|logo)\b[\s,.!?:-]*/i;
+
+const LIST_WORDS = '(to[\\s-]?do|todo|2[\\s-]?do|queue|completed|complete|done|sung)';
+const toListName = (w) => (!w ? null : /^(completed|complete|done|sung)$/i.test(w) ? 'completed' : 'todo');
+
+const norm = (s) => s.toLowerCase().replace(/[^a-z0-9஀-௿\s]/g, '').replace(/\s+/g, ' ').trim();
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Find the song in `list` that best matches what was spoken. Returns its index or -1.
+function findSong(list, spoken) {
+  const q = norm(spoken);
+  if (!q) return -1;
+  let idx = list.findIndex(n => norm(n) === q);
+  if (idx !== -1) return idx;
+  idx = list.findIndex(n => norm(n).includes(q) || q.includes(norm(n)));
+  if (idx !== -1) return idx;
+  const qWords = new Set(q.split(' '));
+  let best = -1, bestScore = 0;
+  list.forEach((n, i) => {
+    const words = norm(n).split(' ');
+    const hits = words.filter(w => qWords.has(w)).length;
+    const score = hits / Math.max(words.length, qWords.size);
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  return bestScore >= 0.5 ? best : -1;
+}
+
+function parseCommand(raw) {
+  const text = raw.trim()
+    .replace(/[.!?]+$/, '')
+    .replace(/^(?:please|can you|could you|now)\s+/i, '')
+    .replace(/\s+please$/i, '')
+    .trim();
+  let m;
+  if (/^(stop listening|stop|turn off|go to sleep|goodbye|bye)$/i.test(text)) return { action: 'off' };
+  if (/^(cancel|never ?mind|nothing)$/i.test(text)) return { action: 'cancel' };
+  if (/^(clear|reset) (the )?search$/i.test(text)) return { action: 'search', query: '' };
+  if ((m = text.match(/^(?:search|find|look for|search for)\s+(.+)$/i))) return { action: 'search', query: m[1] };
+  if ((m = text.match(/^(?:mark|move)\s+(.+?)\s+(?:as\s+)?(?:sung|done|completed|complete|finished)$/i))) return { action: 'sung', song: m[1] };
+  if ((m = text.match(/^(?:i\s+)?(?:sang|have sung|finished)\s+(.+)$/i))) return { action: 'sung', song: m[1] };
+  if ((m = text.match(new RegExp(`^(?:remove|delete)\\s+(.+?)(?:\\s+from\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
+    return { action: 'remove', song: m[1], list: toListName(m[2]) };
+  }
+  if ((m = text.match(new RegExp(`^(?:add|ad|at|put|queue|include)\\s+(?:the\\s+)?(?:song\\s+)?(.+?)(?:\\s+(?:to|in|into|on|under)\\s+(?:the\\s+|my\\s+)?${LIST_WORDS}(?:\\s+list)?)?$`, 'i')))) {
+    return { action: 'add', song: m[1], list: toListName(m[2]) || 'todo' };
+  }
+  return null;
+}
+
+async function runCommand(cmd) {
+  const label = (l) => (l === 'todo' ? 'To-do' : 'Completed');
+  switch (cmd.action) {
+    case 'add': {
+      const name = capitalize(cmd.song.trim());
+      const list = cmd.list === 'completed' ? completed : todo;
+      if (list.some(n => norm(n) === norm(name))) {
+        return { ok: false, msg: `"${name}" is already in ${label(cmd.list)}`, say: `${name} is already in your ${label(cmd.list)} list` };
+      }
+      list.push(name);
+      renderTodo(); renderCompleted();
+      await saveAll();
+      return { ok: true, msg: `"${name}" is added to ${label(cmd.list)}`, say: `Your song ${name} is added to ${label(cmd.list)}` };
+    }
+    case 'sung': {
+      const i = findSong(todo, cmd.song);
+      if (i !== -1) {
+        const [name] = todo.splice(i, 1);
+        completed.push(name);
+        renderTodo(); renderCompleted();
+        await saveAll();
+        return { ok: true, msg: `"${name}" is marked as sung`, say: `Nice! ${name} is marked as sung` };
+      }
+      return runCommand({ action: 'add', song: cmd.song, list: 'completed' });
+    }
+    case 'remove': {
+      const lists = cmd.list ? [cmd.list] : ['todo', 'completed'];
+      for (const l of lists) {
+        const list = l === 'todo' ? todo : completed;
+        const i = findSong(list, cmd.song);
+        if (i !== -1) {
+          const [name] = list.splice(i, 1);
+          renderTodo(); renderCompleted();
+          await saveAll();
+          return { ok: true, msg: `"${name}" is removed from ${label(l)}`, say: `${name} is removed from ${label(l)}` };
+        }
+      }
+      return { ok: false, msg: `Couldn't find "${cmd.song}"`, say: `Sorry, I couldn't find ${cmd.song}` };
+    }
+    case 'search': {
+      document.getElementById('searchInput').value = cmd.query;
+      renderCompleted();
+      return { ok: true, msg: cmd.query ? `Searching for "${cmd.query}"` : 'Search cleared' };
+    }
+  }
+}
+
+const voiceBar = document.getElementById('voiceBar');
+const voiceStatusEl = document.getElementById('voiceStatus');
+const micBtn = document.getElementById('micBtn');
+
+let recognition = null;
+let voiceOn = false;      // mic toggled on by the user
+let listening = false;    // a recognition session is currently running
+let speaking = false;     // we're talking back; the mic is paused so we don't hear ourselves
+let awake = false;        // next utterance is a command, no wake word needed
+let awakeTimer = null;
+let restartTimer = null;
+let errorStreak = 0;
+let handledThisSession = false;
+let lastInterim = '';
+let userTouched = false;
+let tappedAwake = false;  // the current command window was opened by a mic tap (a 2nd tap turns off)  // Chrome may refuse the mic and speech until the page has been touched
+
+function setVoiceStatus(text, kind) {
+  voiceStatusEl.textContent = text;
+  voiceStatusEl.className = 'voice-status' + (kind ? ' ' + kind : '');
+}
+
+function idleStatus() {
+  setVoiceStatus(voiceOn ? 'Say "My Logger"…' : 'Voice off — tap the mic');
+}
+
+function setAwake(on) {
+  clearTimeout(awakeTimer);
+  awake = on;
+  if (!on) tappedAwake = false;
+  voiceBar.classList.toggle('awake', on);
+  if (on) {
+    awakeTimer = setTimeout(() => { setAwake(false); idleStatus(); }, AWAKE_MS);
+  }
+}
+
+// Short two-note chime so you know it woke up, without looking at the screen.
+let audioCtx = null;
+function chime(ok = true) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const notes = ok ? [660, 880] : [440, 330];
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const t = audioCtx.currentTime + i * 0.12;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    });
+  } catch (e) { /* audio is a nicety */ }
+}
+
+// Talk back. The mic is paused while speaking so the reply isn't heard as a command.
+function speak(text) {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) { resolve(); return; }
+    speaking = true;
+    stopSession();
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      speaking = false;
+      resolve();
+      startSession();
+    };
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-IN';
+      u.rate = 1.05;
+      u.onend = done;
+      u.onerror = done;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch (e) { done(); return; }
+    // Some browsers never fire onend; don't leave the mic paused forever.
+    setTimeout(done, 1500 + text.length * 90);
+  });
+}
+
+async function reply(result) {
+  chime(result.ok);
+  setVoiceStatus(result.msg, result.ok ? 'ok' : 'err');
+  await speak(result.say || result.msg);
+}
+
+async function handleUtterance(alternatives) {
+  const heard = alternatives[0].trim();
+  if (!heard) return;
+  let commandText = null;
+  let woke = false;
+  for (const alt of alternatives) {
+    const wake = alt.match(WAKE_RE);
+    if (wake) {
+      woke = true;
+      commandText = alt.slice(wake.index + wake[0].length).trim();
+      break;
+    }
+  }
+
+  if (woke && !commandText) {
+    setAwake(true);
+    chime();
+    setVoiceStatus('Yes? Say a command…');
+    return;
+  }
+  if (!woke) {
+    if (!awake) {
+      setVoiceStatus(`Heard "${heard}" — start with "My Logger"`);
+      return;
+    }
+    commandText = heard;
+  }
+
+  setAwake(false);
+  if (!docLoaded) { await reply({ ok: false, msg: 'Still loading your list — try again in a moment' }); return; }
+  const cmd = parseCommand(commandText);
+  if (!cmd) {
+    await reply({ ok: false, msg: `Didn't understand "${commandText}"`, say: "Sorry, I didn't get that" });
+    setAwake(true); // give another go without repeating the wake word
+    setVoiceStatus(`Didn't understand "${commandText}" — try again`, 'err');
+    return;
+  }
+  if (cmd.action === 'off') { await speak('Okay, bye'); stopVoice(); setVoiceStatus('Voice off — see you!'); return; }
+  if (cmd.action === 'cancel') { idleStatus(); return; }
+
+  const result = await runCommand(cmd);
+  await reply(result);
+  // Stay ready for a follow-up command for a few seconds.
+  setAwake(true);
+}
+
+function createRecognition() {
+  const r = new SpeechRecognition();
+  // One utterance per session, restarted in onend: far more reliable on Android and iOS
+  // than continuous mode, which drops or repeats results there.
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 3;
+  r.lang = 'en-IN';
+
+  r.onstart = () => {
+    listening = true;
+    handledThisSession = false;
+    lastInterim = '';
+    voiceBar.classList.add('live');
+  };
+
+  r.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const res = event.results[i];
+      if (res.isFinal) {
+        handledThisSession = true;
+        lastInterim = '';
+        const alts = Array.from(res, a => a.transcript);
+        handleUtterance(alts);
+      } else {
+        lastInterim = res[0].transcript;
+        setVoiceStatus(`“${lastInterim.trim()}”`);
+      }
+    }
+    errorStreak = 0;
+  };
+
+  r.onerror = (event) => {
+    if ((event.error === 'not-allowed' || event.error === 'service-not-allowed') && !userTouched) {
+      // Chrome wouldn't start the mic by itself on open; the first touch anywhere will start it.
+      voiceOn = false;
+      setAwake(false);
+      voiceBar.classList.remove('on', 'live');
+      setVoiceStatus('Tap anywhere to start listening');
+    } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      stopVoice();
+      setVoiceStatus('Mic blocked — allow microphone access for this site', 'err');
+    } else if (event.error === 'audio-capture') {
+      stopVoice();
+      setVoiceStatus('No microphone found', 'err');
+    } else if (event.error === 'network') {
+      errorStreak++;
+      setVoiceStatus('Voice needs an internet connection…', 'err');
+    }
+    // 'no-speech' and 'aborted' are routine; onend restarts us.
+  };
+
+  r.onend = () => {
+    listening = false;
+    voiceBar.classList.remove('live');
+    // Some mobile browsers end the session without ever marking the result final.
+    if (!handledThisSession && lastInterim.trim()) {
+      const text = lastInterim;
+      lastInterim = '';
+      handleUtterance([text]);
+    }
+    scheduleRestart();
+  };
+  return r;
+}
+
+function scheduleRestart() {
+  clearTimeout(restartTimer);
+  if (!voiceOn || speaking || document.hidden) return;
+  const delay = errorStreak ? Math.min(1000 * errorStreak, 5000) : 100;
+  restartTimer = setTimeout(startSession, delay);
+}
+
+function startSession() {
+  if (!voiceOn || speaking || listening || document.hidden) return;
+  if (!recognition) recognition = createRecognition();
+  try { recognition.start(); listening = true; } catch (e) { /* already running */ }
+}
+
+function stopSession() {
+  clearTimeout(restartTimer);
+  if (recognition && listening) { try { recognition.abort(); } catch (e) {} }
+}
+
+function startVoice({ ready = false } = {}) {
+  voiceOn = true;
+  errorStreak = 0;
+  voiceBar.classList.add('on');
+  micBtn.setAttribute('aria-pressed', 'true');
+  if (ready) {
+    setAwake(true);
+    setVoiceStatus('Listening — say a command, e.g. "Add Nilave vaa"');
+  } else {
+    idleStatus();
+  }
+  startSession();
+}
+
+function stopVoice() {
+  voiceOn = false;
+  setAwake(false);
+  stopSession();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  voiceBar.classList.remove('on', 'live');
+  micBtn.setAttribute('aria-pressed', 'false');
+  idleStatus();
+}
+
+// iOS/Android only let a page speak or play sounds after a touch; unlock both on the first one.
+function unlockAudio() {
+  try { speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {}
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {}
+}
+
+// Start listening whenever the app is opened or brought back on screen.
+function autoStart() {
+  if (voiceOn || document.hidden) return;
+  startVoice({ ready: true });
+  chime();
+}
+
+if (SpeechRecognition) {
+  voiceBar.style.display = '';
+  document.getElementById('voiceHelp').style.display = '';
+  micBtn.addEventListener('click', () => {
+    unlockAudio();
+    if (voiceOn && awake && tappedAwake) { stopVoice(); return; }
+    chime();
+    // Tapping the mic means "I'm about to give a command" — no wake word needed.
+    if (voiceOn) setAwake(true);
+    else startVoice({ ready: true });
+    tappedAwake = true;
+    setVoiceStatus('Listening — say a command (tap again to turn off)');
+  });
+
+  // The first touch anywhere unlocks spoken replies, and starts the mic if Chrome
+  // refused to start it on its own when the app opened.
+  const onFirstTouch = (e) => {
+    userTouched = true;
+    unlockAudio();
+    if (!voiceOn && !micBtn.contains(e.target)) autoStart();
+  };
+  document.addEventListener('pointerdown', onFirstTouch, { once: true, capture: true });
+
+  // Pause the mic while the app is in the background; start again when it comes back.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { stopSession(); return; }
+    if (voiceOn) startSession();
+    else autoStart();
+  });
+
+  // "?listen" is used by Siri/Google Assistant shortcuts; listening starts on open anyway.
+  if (new URLSearchParams(location.search).has('listen')) {
+    history.replaceState(null, '', location.pathname);
+  }
+  autoStart();
+}
 </script>
 </body>
 </html>
