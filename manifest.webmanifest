@@ -1,7 +1,7 @@
 {
   "name": "Hari Log",
   "short_name": "Hari Log",
-  "description": "Track songs from the \"Let's Find The Song\" YouTube series.",
+  "description": "Track YouTube content by category — ideas, videos in progress and posted videos.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

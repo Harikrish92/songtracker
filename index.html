@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1b1330">
-<meta name="description" content="Track songs from the &quot;Let's Find The Song&quot; YouTube series.">
+<meta name="description" content="Track YouTube content by category — ideas, videos in progress and posted videos.">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,6 +22,7 @@
     --text: #f2ead9;
     --text-dim: #b6acc9;
     --line: #3a2c5c;
+    --danger: #e07a7a;
   }
   *{box-sizing:border-box;}
   html{-webkit-text-size-adjust:100%;}
@@ -38,14 +39,14 @@
     padding-top: calc(28px + env(safe-area-inset-top));
     padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }
-  .wrap{max-width:1000px;margin:0 auto;}
+  .wrap{max-width:1200px;margin:0 auto;}
   .columns{
     display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:32px;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:24px;
     align-items:start;
   }
-  @media (max-width:720px){
+  @media (max-width:900px){
     .columns{grid-template-columns:1fr;gap:0;}
   }
   @media (max-width:480px){
@@ -60,6 +61,10 @@
     .section-title{font-size:16px;}
     li.song{padding:10px 12px;}
     .song-name{font-size:15px;}
+  }
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+    overflow:hidden;clip:rect(0,0,0,0);border:0;
   }
   header{
     text-align:center;
@@ -89,6 +94,48 @@
     line-height:1.5;
   }
 
+  .category-bar{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    max-width:560px;
+    margin:0 auto 24px;
+  }
+  .category-bar select{
+    flex:1;
+    min-width:0;
+    min-height:44px;
+    padding:0 40px 0 14px;
+    border-radius:8px;
+    border:1px solid var(--gold);
+    background:
+      linear-gradient(45deg, transparent 50%, var(--gold-soft) 50%) right 20px center / 6px 6px no-repeat,
+      linear-gradient(135deg, var(--gold-soft) 50%, transparent 50%) right 14px center / 6px 6px no-repeat,
+      var(--bg-panel);
+    color:var(--text);
+    font-family:'Georgia', 'Iowan Old Style', serif;
+    font-size:17px;
+    outline:none;
+    appearance:none;
+    -webkit-appearance:none;
+    cursor:pointer;
+  }
+  .category-bar select:focus{border-color:var(--gold-soft);}
+  .category-bar select option{background:var(--bg-panel);color:var(--text);}
+  .icon-btn{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    color:var(--gold-soft);
+    border-radius:8px;
+    min-width:44px;
+    min-height:44px;
+    font-size:16px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .icon-btn:hover{border-color:var(--gold-soft);}
+  .icon-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+
   section.block{margin-bottom:34px;}
   .section-head{
     display:flex;
@@ -107,8 +154,7 @@
     color:var(--text-dim);
   }
 
-  .search-row{margin-bottom:12px;}
-  .search-row input{
+  .text-input{
     width:100%;
     padding:10px 14px;
     min-height:44px;
@@ -120,29 +166,17 @@
     font-size:16px;
     outline:none;
   }
-  .search-row input:focus{border-color:var(--gold-soft);}
-  .search-row input::placeholder{color:var(--text-dim);}
+  .text-input:focus{border-color:var(--gold-soft);}
+  .text-input::placeholder{color:var(--text-dim);}
+  .search-row{margin-bottom:12px;}
 
   .add-row{
     display:flex;
     gap:8px;
     margin-bottom:16px;
   }
-  .add-row input{
-    flex:1;
-    min-width:0;
-    padding:10px 14px;
-    min-height:44px;
-    border-radius:8px;
-    border:1px solid var(--line);
-    background:var(--bg-panel);
-    color:var(--text);
-    font-family:'Helvetica Neue', Arial, sans-serif;
-    font-size:16px;
-    outline:none;
-  }
-  .add-row input:focus{border-color:var(--gold-soft);}
-  .add-row button{
+  .add-row .text-input{flex:1;min-width:0;}
+  .primary-btn{
     background: var(--gold);
     color:#1b1330;
     border:none;
@@ -156,7 +190,19 @@
     font-size:14px;
     cursor:pointer;
   }
-  .add-row button:hover{background:var(--gold-soft);}
+  .primary-btn:hover{background:var(--gold-soft);}
+  .ghost-btn{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    border-radius:8px;
+    padding:0 16px;
+    min-height:44px;
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .ghost-btn:hover{border-color:var(--text-dim);color:var(--text);}
 
   ul.list{list-style:none;margin:0;padding:0;}
   li.song{
@@ -178,18 +224,31 @@
     width:20px;
     flex-shrink:0;
   }
+  .item-body{flex:1;min-width:0;}
   .song-name{
-    flex:1;
-    min-width:0;
+    display:block;
     font-size:15.5px;
     line-height:1.3;
     overflow-wrap:break-word;
   }
+  .meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px 12px;
+    margin-top:4px;
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .meta:empty{display:none;}
+  .meta a{color:var(--gold-soft);text-decoration:none;}
+  .meta a:hover{text-decoration:underline;}
   .actions{
     display:flex;
     align-items:center;
-    gap:4px;
+    gap:2px;
     flex-shrink:0;
+    margin-left:auto;
   }
   .done-btn{
     background:none;
@@ -204,20 +263,34 @@
     border-radius:16px;
     cursor:pointer;
     white-space:nowrap;
+    margin-right:4px;
   }
   .done-btn:hover{border-color:var(--gold-soft); background:rgba(212,175,55,0.08);}
-  .remove-btn{
+  .mini-btn{
     background:none;
     border:none;
     color:var(--text-dim);
-    font-size:18px;
+    font-size:16px;
     cursor:pointer;
     line-height:1;
     padding:8px;
     min-width:36px;
     min-height:36px;
   }
-  .remove-btn:hover{color:#e07a7a;}
+  .mini-btn:hover{color:var(--text);}
+  .mini-btn.remove{font-size:18px;}
+  .mini-btn.remove:hover{color:var(--danger);}
+
+  .edit-form{width:100%;display:flex;flex-direction:column;gap:8px;}
+  .edit-form label{
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    font-size:11px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
+  .edit-form .text-input{margin-top:4px;color-scheme:dark;}
+  .edit-buttons{display:flex;gap:8px;justify-content:flex-end;}
 
   .empty{
     text-align:center;
@@ -239,43 +312,66 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">Let's Find The Song</div>
+    <div class="eyebrow">YouTube Content Tracker</div>
     <h1>Hari Log</h1>
-    <div class="subtitle">Songs from the "Let's Find The Song" YouTube series.<br>Keep upcoming picks in the To-do list, move them down once sung.</div>
+    <div class="subtitle">Pick a category, line up ideas in To-do,<br>move them to In progress while creating, and to Posted once live.</div>
     <div class="sync-status" id="syncStatus"></div>
   </header>
 
-  <div id="loading" class="loading">Loading your list…</div>
+  <div id="loading" class="loading">Loading your content…</div>
 
-  <div id="content" class="columns" style="display:none;">
-    <section class="block">
-      <div class="section-head">
-        <div class="section-title">To-do</div>
-        <div class="count-label" id="todoCountLabel"></div>
-      </div>
-      <div class="add-row">
-        <input type="text" id="todoAddInput" placeholder="Add a song to try next…">
-        <button id="todoAddBtn">Add</button>
-      </div>
-      <ul class="list" id="todoList"></ul>
-      <div class="empty" id="todoEmptyMsg" style="display:none;">Nothing queued up yet.</div>
-    </section>
+  <div id="content" style="display:none;">
+    <div class="category-bar">
+      <label for="categorySelect" class="sr-only">Category</label>
+      <select id="categorySelect"></select>
+      <button class="icon-btn" id="newCategoryBtn" title="New category" aria-label="New category">＋</button>
+      <button class="icon-btn" id="renameCategoryBtn" title="Rename category" aria-label="Rename category">✎</button>
+      <button class="icon-btn danger" id="deleteCategoryBtn" title="Delete category" aria-label="Delete category">✕</button>
+    </div>
 
-    <section class="block">
-      <div class="section-head">
-        <div class="section-title">Completed</div>
-        <div class="count-label" id="completedCountLabel"></div>
-      </div>
-      <div class="search-row">
-        <input type="text" id="searchInput" placeholder="Search completed songs…">
-      </div>
-      <div class="add-row">
-        <input type="text" id="addInput" placeholder="Add a newly completed song…">
-        <button id="addBtn">Add</button>
-      </div>
-      <ul class="list" id="list"></ul>
-      <div class="empty" id="emptyMsg" style="display:none;">No songs match your search.</div>
-    </section>
+    <div class="columns">
+      <section class="block" data-stage="todo">
+        <div class="section-head">
+          <div class="section-title">To-do</div>
+          <div class="count-label"></div>
+        </div>
+        <div class="add-row">
+          <input type="text" class="text-input add-input" placeholder="Add a video idea…">
+          <button class="primary-btn add-btn">Add</button>
+        </div>
+        <ul class="list"></ul>
+        <div class="empty">Nothing queued up yet.</div>
+      </section>
+
+      <section class="block" data-stage="doing">
+        <div class="section-head">
+          <div class="section-title">In progress</div>
+          <div class="count-label"></div>
+        </div>
+        <div class="add-row">
+          <input type="text" class="text-input add-input" placeholder="Add a video you're making…">
+          <button class="primary-btn add-btn">Add</button>
+        </div>
+        <ul class="list"></ul>
+        <div class="empty">Nothing in production right now.</div>
+      </section>
+
+      <section class="block" data-stage="posted">
+        <div class="section-head">
+          <div class="section-title">Posted</div>
+          <div class="count-label"></div>
+        </div>
+        <div class="search-row">
+          <input type="text" class="text-input" id="searchInput" placeholder="Search posted videos…">
+        </div>
+        <div class="add-row">
+          <input type="text" class="text-input add-input" placeholder="Add an already-posted video…">
+          <button class="primary-btn add-btn">Add</button>
+        </div>
+        <ul class="list"></ul>
+        <div class="empty"></div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -302,40 +398,75 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const docRef = db.collection('songtracker').doc('035fbd6c3b1d4fa8b3aa08a86d41528a');
 
-const defaultCompleted = [
-  "Unnal mudiyum thambi",
-  "Jumbalaka Jumbalaka",
-  "Naan malarodu",
-  "Nilave vaa",
-  "Venmathi venmathiye nillu",
-  "Senthamizh thenmozhiyal",
-  "Nee kattum sela madipula",
-  "Chiku bukku chiku bukku",
-  "Kasu mela kasu vanthu",
-  "Thendrale thendrale",
-  "Vizhigalin Aruginil Vaanam",
-  "Yaaro ivan yaaro",
-  "Sorgame endralum",
-  "Kuru mugil",
-  "Engayo paartha mayakam",
-  "Kaatu kuyilu manasukulla",
-  "Pachamalai poovu",
-  "Amma Amma Nee enga amma",
-  "Athinthom",
-  "Nilave ennidam",
-  "Om Sivoham",
-  "Thamarai poovukum"
-];
+// Category the old song-only data gets moved into on first load.
+const LEGACY_CATEGORY = "Let's Find The Song";
+const SELECTED_KEY = 'hari-log-category';
 
-const defaultTodo = [
-  "Innum ennai enna seiya",
-  "Sundari kannal oru",
-  "Naanaga naan illai"
-];
+const STAGES = {
+  todo:   { countWord: 'queued',      forward: { label: 'Start',       to: 'doing'  } },
+  doing:  { countWord: 'in progress', forward: { label: 'Mark posted', to: 'posted' }, back: 'todo' },
+  posted: { countWord: 'posted',      back: 'doing' }
+};
 
-let completed = [];
-let todo = [];
+// Shape: [{ id, name, items: [{ id, title, status: 'todo'|'doing'|'posted', url, postedAt: 'YYYY-MM-DD' }] }]
+let categories = [];
+let selectedId = null;
 let docLoaded = false;
+// Inline edit in progress; kept here so a sync from another device doesn't wipe what's being typed.
+let editing = null;
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function today() {
+  return new Date().toLocaleDateString('en-CA');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function normalizeUrl(raw) {
+  const url = (raw || '').trim();
+  if (!url) return '';
+  return /^https?:\/\//i.test(url) ? url : 'https://' + url;
+}
+
+function formatDate(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  if (!y || !m || !d) return ymd;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function newItem(title, status) {
+  return { id: uid(), title, status, url: '', postedAt: status === 'posted' ? today() : '' };
+}
+
+function migrateLegacy(data) {
+  const items = [
+    ...(data.todo || []).map((t) => newItem(t, 'todo')),
+    ...(data.completed || []).map((t) => ({ ...newItem(t, 'posted'), postedAt: '' }))
+  ];
+  return [{ id: uid(), name: LEGACY_CATEGORY, items }];
+}
+
+function loadSelected() {
+  try { return localStorage.getItem(SELECTED_KEY); } catch (e) { return null; }
+}
+
+function storeSelected(id) {
+  try { localStorage.setItem(SELECTED_KEY, id); } catch (e) { /* storage unavailable */ }
+}
+
+function currentCategory() {
+  return categories.find((c) => c.id === selectedId) || null;
+}
+
+function findItem(id) {
+  const cat = currentCategory();
+  return cat ? cat.items.find((i) => i.id === id) : null;
+}
 
 function setSyncStatus(fromCache) {
   const statusEl = document.getElementById('syncStatus');
@@ -354,145 +485,262 @@ function showContent() {
 }
 
 docRef.onSnapshot(async (snap) => {
-  if (snap.exists) {
-    const data = snap.data();
-    completed = data.completed || [];
-    todo = data.todo || [];
-  } else if (!docLoaded) {
-    completed = [...defaultCompleted];
-    todo = [...defaultTodo];
-    await saveAll();
+  const data = snap.exists ? snap.data() : {};
+  if (Array.isArray(data.categories)) {
+    categories = data.categories;
+  } else {
+    categories = migrateLegacy(data);
+    // Only write the migration once the server has confirmed there's no category data yet.
+    if (!snap.metadata.fromCache) await saveAll();
   }
   docLoaded = true;
   setSyncStatus(snap.metadata.fromCache);
   showContent();
-  renderTodo();
-  renderCompleted();
+  renderAll();
 }, (err) => {
   console.error('Sync error', err);
   if (!docLoaded) {
-    completed = [...defaultCompleted];
-    todo = [...defaultTodo];
-    docLoaded = true;
-    showContent();
-    renderTodo();
-    renderCompleted();
+    document.getElementById('loading').textContent = 'Could not load your content. Check your connection and reload.';
   }
   setSyncStatus(true);
 });
 
 async function saveAll() {
-  try { await docRef.set({ completed, todo }); }
+  // Merge keeps the legacy todo/completed fields around as a backup.
+  try { await docRef.set({ categories }, { merge: true }); }
   catch (e) { console.error('Save failed', e); }
 }
 
-function renderTodo() {
-  const listEl = document.getElementById('todoList');
-  const emptyMsg = document.getElementById('todoEmptyMsg');
-  const countLabel = document.getElementById('todoCountLabel');
+function commit() {
+  renderAll();
+  saveAll();
+}
 
-  listEl.innerHTML = '';
-  listEl.style.display = todo.length ? 'block' : 'none';
-  emptyMsg.style.display = todo.length ? 'none' : 'block';
-  countLabel.textContent = `${todo.length} queued`;
+function renderAll() {
+  if (!categories.some((c) => c.id === selectedId)) {
+    const stored = loadSelected();
+    selectedId = categories.some((c) => c.id === stored) ? stored : (categories[0] ? categories[0].id : null);
+  }
+  renderCategorySelect();
+  Object.keys(STAGES).forEach(renderStage);
+}
 
-  todo.forEach((name, idx) => {
-    const li = document.createElement('li');
-    li.className = 'song';
-    li.innerHTML = `
+function renderCategorySelect() {
+  const select = document.getElementById('categorySelect');
+  select.innerHTML = categories.length
+    ? categories.map((c) =>
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)} (${c.items.length})</option>`
+      ).join('')
+    : '<option value="">No categories yet</option>';
+  select.value = selectedId || '';
+  document.getElementById('renameCategoryBtn').disabled = !selectedId;
+  document.getElementById('deleteCategoryBtn').disabled = !selectedId;
+  document.querySelector('.columns').style.display = selectedId ? '' : 'none';
+}
+
+function renderStage(stage) {
+  const section = document.querySelector(`section[data-stage="${stage}"]`);
+  const listEl = section.querySelector('ul.list');
+  const emptyMsg = section.querySelector('.empty');
+  const countLabel = section.querySelector('.count-label');
+  const cat = currentCategory();
+  const all = cat ? cat.items.filter((i) => i.status === stage) : [];
+
+  let shown = all;
+  let query = '';
+  if (stage === 'posted') {
+    query = document.getElementById('searchInput').value.trim().toLowerCase();
+    shown = all.filter((i) => i.title.toLowerCase().includes(query));
+    emptyMsg.textContent = all.length ? 'No videos match your search.' : 'Nothing posted yet.';
+  }
+
+  countLabel.textContent = query ? `${shown.length} of ${all.length}` : `${all.length} ${STAGES[stage].countWord}`;
+  listEl.style.display = shown.length ? 'block' : 'none';
+  emptyMsg.style.display = shown.length ? 'none' : 'block';
+  listEl.innerHTML = shown.map((item, idx) =>
+    editing && editing.id === item.id ? renderEditForm(item) : renderItem(item, idx)
+  ).join('');
+}
+
+function renderItem(item, idx) {
+  const stage = STAGES[item.status];
+  const meta = [];
+  if (item.url) meta.push(`<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">▶ Watch</a>`);
+  if (item.postedAt) meta.push(`<span>${escapeHtml(formatDate(item.postedAt))}</span>`);
+  return `
+    <li class="song" data-id="${escapeHtml(item.id)}">
       <span class="idx">${idx + 1}</span>
-      <span class="song-name">${name}</span>
-      <div class="actions">
-        <button class="done-btn" data-idx="${idx}">Mark sung</button>
-        <button class="remove-btn" data-idx="${idx}" title="Remove">✕</button>
+      <div class="item-body">
+        <span class="song-name">${escapeHtml(item.title)}</span>
+        <div class="meta">${meta.join('')}</div>
       </div>
-    `;
-    listEl.appendChild(li);
-  });
-
-  listEl.querySelectorAll('.done-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const idx = parseInt(e.currentTarget.dataset.idx);
-      const [name] = todo.splice(idx, 1);
-      completed.push(name);
-      renderTodo();
-      renderCompleted();
-      await saveAll();
-    });
-  });
-  listEl.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const idx = parseInt(e.currentTarget.dataset.idx);
-      todo.splice(idx, 1);
-      renderTodo();
-      await saveAll();
-    });
-  });
+      <div class="actions">
+        ${stage.forward ? `<button class="done-btn" data-action="forward">${stage.forward.label}</button>` : ''}
+        ${stage.back ? `<button class="mini-btn" data-action="back" title="Move back" aria-label="Move back">↩</button>` : ''}
+        <button class="mini-btn" data-action="edit" title="Edit" aria-label="Edit">✎</button>
+        <button class="mini-btn remove" data-action="remove" title="Remove" aria-label="Remove">✕</button>
+      </div>
+    </li>`;
 }
 
-function renderCompleted() {
-  const listEl = document.getElementById('list');
-  const emptyMsg = document.getElementById('emptyMsg');
-  const countLabel = document.getElementById('completedCountLabel');
-  const query = document.getElementById('searchInput').value.trim().toLowerCase();
-
-  const filtered = completed
-    .map((name, originalIdx) => ({ name, originalIdx }))
-    .filter(s => s.name.toLowerCase().includes(query));
-
-  listEl.innerHTML = '';
-  listEl.style.display = filtered.length ? 'block' : 'none';
-  emptyMsg.style.display = filtered.length ? 'none' : (completed.length ? 'block' : 'none');
-  countLabel.textContent = query
-    ? `${filtered.length} of ${completed.length}`
-    : `${completed.length} learned`;
-
-  filtered.forEach((s, displayIdx) => {
-    const li = document.createElement('li');
-    li.className = 'song';
-    li.innerHTML = `
-      <span class="idx">${displayIdx + 1}</span>
-      <span class="song-name">${s.name}</span>
-      <button class="remove-btn" data-idx="${s.originalIdx}" title="Remove">✕</button>
-    `;
-    listEl.appendChild(li);
-  });
-
-  listEl.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const idx = parseInt(e.currentTarget.dataset.idx);
-      completed.splice(idx, 1);
-      renderCompleted();
-      await saveAll();
-    });
-  });
+function renderEditForm(item) {
+  return `
+    <li class="song" data-id="${escapeHtml(item.id)}">
+      <div class="edit-form">
+        <label>Title
+          <input type="text" class="text-input" data-field="title" value="${escapeHtml(editing.title)}">
+        </label>
+        <label>YouTube link
+          <input type="url" class="text-input" data-field="url" value="${escapeHtml(editing.url)}" placeholder="https://youtu.be/…">
+        </label>
+        ${item.status === 'posted' ? `
+        <label>Posted on
+          <input type="date" class="text-input" data-field="postedAt" value="${escapeHtml(editing.postedAt)}">
+        </label>` : ''}
+        <div class="edit-buttons">
+          <button class="ghost-btn" data-action="cancel-edit">Cancel</button>
+          <button class="primary-btn" data-action="save-edit">Save</button>
+        </div>
+      </div>
+    </li>`;
 }
 
-document.getElementById('searchInput').addEventListener('input', renderCompleted);
+function moveItem(item, to) {
+  const cat = currentCategory();
+  // Moved items go to the end of their new list.
+  cat.items = cat.items.filter((i) => i.id !== item.id);
+  item.status = to;
+  if (to === 'posted') {
+    if (!item.postedAt) item.postedAt = today();
+    if (!item.url) {
+      const link = prompt('YouTube link for this video (optional):', '');
+      if (link) item.url = normalizeUrl(link);
+    }
+  } else {
+    item.postedAt = '';
+  }
+  cat.items.push(item);
+}
 
-async function addCompleted() {
-  const input = document.getElementById('addInput');
-  const name = input.value.trim();
+function handleListClick(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const li = btn.closest('li[data-id]');
+  const item = findItem(li.dataset.id);
+  if (!item) return;
+  const stage = STAGES[item.status];
+
+  switch (btn.dataset.action) {
+    case 'forward':
+      moveItem(item, stage.forward.to);
+      commit();
+      break;
+    case 'back':
+      moveItem(item, stage.back);
+      commit();
+      break;
+    case 'remove': {
+      const cat = currentCategory();
+      cat.items = cat.items.filter((i) => i.id !== item.id);
+      commit();
+      break;
+    }
+    case 'edit':
+      editing = { id: item.id, title: item.title, url: item.url || '', postedAt: item.postedAt || '' };
+      renderAll();
+      document.querySelector(`li[data-id="${item.id}"] [data-field="title"]`).focus();
+      break;
+    case 'cancel-edit':
+      editing = null;
+      renderAll();
+      break;
+    case 'save-edit': {
+      const title = editing.title.trim();
+      if (!title) return;
+      item.title = title;
+      item.url = normalizeUrl(editing.url);
+      if (item.status === 'posted') item.postedAt = editing.postedAt;
+      editing = null;
+      commit();
+      break;
+    }
+  }
+}
+
+function handleListInput(e) {
+  const field = e.target.dataset.field;
+  if (editing && field) editing[field] = e.target.value;
+}
+
+function handleListKeydown(e) {
+  if (!editing || !e.target.dataset.field) return;
+  const li = e.target.closest('li[data-id]');
+  if (e.key === 'Enter') li.querySelector('[data-action="save-edit"]').click();
+  if (e.key === 'Escape') li.querySelector('[data-action="cancel-edit"]').click();
+}
+
+document.querySelectorAll('section[data-stage]').forEach((section) => {
+  const stage = section.dataset.stage;
+  const listEl = section.querySelector('ul.list');
+  const input = section.querySelector('.add-input');
+
+  listEl.addEventListener('click', handleListClick);
+  listEl.addEventListener('input', handleListInput);
+  listEl.addEventListener('keydown', handleListKeydown);
+
+  const add = () => {
+    const cat = currentCategory();
+    const title = input.value.trim();
+    if (!cat || !title) return;
+    cat.items.push(newItem(title, stage));
+    input.value = '';
+    commit();
+  };
+  section.querySelector('.add-btn').addEventListener('click', add);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+});
+
+document.getElementById('searchInput').addEventListener('input', () => renderStage('posted'));
+
+document.getElementById('categorySelect').addEventListener('change', (e) => {
+  selectedId = e.target.value;
+  storeSelected(selectedId);
+  editing = null;
+  document.getElementById('searchInput').value = '';
+  renderAll();
+});
+
+document.getElementById('newCategoryBtn').addEventListener('click', () => {
+  const name = (prompt('New category name:') || '').trim();
   if (!name) return;
-  completed.push(name);
-  input.value = '';
-  renderCompleted();
-  await saveAll();
-}
-document.getElementById('addBtn').addEventListener('click', addCompleted);
-document.getElementById('addInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addCompleted(); });
+  const cat = { id: uid(), name, items: [] };
+  categories.push(cat);
+  selectedId = cat.id;
+  storeSelected(selectedId);
+  commit();
+});
 
-async function addTodo() {
-  const input = document.getElementById('todoAddInput');
-  const name = input.value.trim();
-  if (!name) return;
-  todo.push(name);
-  input.value = '';
-  renderTodo();
-  await saveAll();
-}
-document.getElementById('todoAddBtn').addEventListener('click', addTodo);
-document.getElementById('todoAddInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
+document.getElementById('renameCategoryBtn').addEventListener('click', () => {
+  const cat = currentCategory();
+  if (!cat) return;
+  const name = (prompt('Rename category:', cat.name) || '').trim();
+  if (!name || name === cat.name) return;
+  cat.name = name;
+  commit();
+});
+
+document.getElementById('deleteCategoryBtn').addEventListener('click', () => {
+  const cat = currentCategory();
+  if (!cat) return;
+  const count = cat.items.length;
+  const msg = count
+    ? `Delete "${cat.name}" and its ${count} item${count === 1 ? '' : 's'}? This can't be undone.`
+    : `Delete "${cat.name}"?`;
+  if (!confirm(msg)) return;
+  categories = categories.filter((c) => c.id !== cat.id);
+  selectedId = null;
+  commit();
+});
 </script>
 </body>
 </html>
